@@ -75,7 +75,7 @@ public class SyncClient
 		Common.load(set, path, "", blocSize);
 
 		List<FileDesc> fileDescs=info.getFileDescs();
-		System.out.println("file count: "+fileDescs.size()+" / "+set.size());
+		log.debug("file count: "+fileDescs.size()+" / "+set.size());
 		l1: for(FileDesc desc:fileDescs)
 			{
 			Iterator<FileDesc> it=set.iterator();
@@ -84,13 +84,13 @@ public class SyncClient
 				FileDesc fd=it.next();
 				if(fd.getName().toString().contentEquals(desc.getName()))
 					{
-					CommitDesc commitDesc=new CommitDesc(desc);
+					CommitDesc commitDesc=new CommitDesc(desc, fd.getFileHash());
 					commitDesc.start();
 					it.remove();
 					continue l1;
 					}
 				}
-			System.out.println("delete '"+desc.getName()+"'");
+			log.debug("delete '"+desc.getName()+"'");
 			synchronized (sync)
 				{
 				sync.delete(uuid, desc.getName());
@@ -102,7 +102,7 @@ public class SyncClient
 				{
 				File f=new File(path, fd.getName().toString());
 				FileInputStream fis=new FileInputStream(f);
-				System.out.println("adding new file "+fd.getName());
+				log.debug("adding new file "+fd.getName());
 				sync.startAppend(uuid, fd.getName());
 
 				byte[] b=new byte[2048];
@@ -143,6 +143,10 @@ public class SyncClient
 
 		public void run()
 			{
+			Map<Integer,P> hash=new HashMap<Integer,P>();
+			for(int i=0; i<fd.getBlocCount(); i++)
+				hash.put(fd.getRoll().get(i), new P(i, fd.getHash().get(i)));
+
 			try
 				{
 				boolean done;
@@ -150,9 +154,12 @@ public class SyncClient
 					{
 					blocFound.clear();
 					long start=System.currentTimeMillis();
-					found();
+					found(hash);
 					log.debug("computing hash %s took %d ms", fd.getName(), System.currentTimeMillis()-start);
-					done=reconstruct();
+					synchronized (sync)
+						{
+						done=reconstruct();
+						}
 					long d=System.currentTimeMillis()-start;
 					log.info("updating %s took %d ms (%.3f Ko/sec)", fd.getName(), d, 1000.*file.length()/(8.*d));
 					}
@@ -168,7 +175,7 @@ public class SyncClient
 				}
 			}
 
-		public void found() throws IOException, NoSuchAlgorithmException
+		public void found(Map<Integer,P> hash) throws IOException, NoSuchAlgorithmException
 			{
 			try
 				{
@@ -186,14 +193,12 @@ public class SyncClient
 				while ((c=fis.read())!=-1)
 					{
 					int r=rcs.append((byte)c);
-					for(int j=0; j<fd.getRoll().size(); j++)
-						{
-						if(r==fd.getRoll().get(j))
-							{ // found match
-							if(Arrays.equals(md.digest(rcs.buf()), fd.getHash().get(j).bytes()))
-								blocFound.put(j, off);
-							md.reset();
-							}
+					P p=hash.get(r);
+					if(p!=null)
+						{ // found match
+						if(Arrays.equals(md.digest(rcs.buf()), p.hash.bytes()))
+							blocFound.put(p.i, off);
+						md.reset();
 						}
 					off++;
 					}
@@ -221,7 +226,7 @@ public class SyncClient
 			{
 			if(fd.getBlocCount()==blocFound.size())
 				return true; // file unchanged
-			System.out.println("start reconstruct");
+			log.debug("start reconstruct");
 
 			File tmp=File.createTempFile("sync", file.getName());
 			try (FileOutputStream fos=new FileOutputStream(tmp))
@@ -230,11 +235,11 @@ public class SyncClient
 
 				if(blocFound.size()<fd.getBlocCount()*.6)
 					{ // download full file
-					System.out.println("'"+fd.getName()+"' new");
+					log.debug("'"+fd.getName()+"' new");
 					ByteBuffer data=sync.getFile(uuid, fd.getName());
 					if(data==null)
 						{
-						System.out.println("failed to get file");
+						log.debug("failed to get file");
 						return false;
 						}
 					byte buf[]=new byte[2048];
@@ -259,8 +264,8 @@ public class SyncClient
 							{
 							if(blocFound.containsKey(i))
 								{
-								System.out.println("read bloc "+i+" from "+fd.getName());
-								System.out.println(blocFound.get(i));
+								log.debug("read bloc "+i+" from "+fd.getName());
+								log.debug(blocFound.get(i));
 								ram.seek(blocFound.get(i));
 								int bs=buf.length;
 								int s;
@@ -273,11 +278,11 @@ public class SyncClient
 								}
 							else
 								{ // get it from serv
-								System.out.println("read bloc "+i+" from serv");
+								log.debug("read bloc "+i+" from serv");
 								ByteBuffer bloc=sync.getBloc(uuid, fd.getName(), i);
 								if(bloc==null)
 									{
-									System.out.println("failed to get bloc");
+									log.debug("failed to get bloc");
 									return false;
 									}
 								fos.write(bloc.array());
@@ -291,38 +296,63 @@ public class SyncClient
 				file.getParentFile().mkdirs();
 				Files.move(Paths.get(tmp.getAbsolutePath()), Paths.get(file.getAbsolutePath()), StandardCopyOption.REPLACE_EXISTING);
 				byte[] digest=md.digest();
-				System.out.println("got: "+StringTools.toHex(digest));
-				System.out.println("exp: "+StringTools.toHex(fd.getFileHash().bytes()));
+				log.debug("got: "+StringTools.toHex(digest));
+				log.debug("exp: "+StringTools.toHex(fd.getFileHash().bytes()));
 				return Arrays.equals(digest, fd.getFileHash().bytes());
 				}
+			}
+		}
+
+	private static class P
+		{
+		int i;
+		Hash hash;
+
+		public P(int i, Hash hash)
+			{
+			this.i=i;
+			this.hash=hash;
 			}
 		}
 
 	private class CommitDesc extends Thread
 		{
 		private FileDesc fd;
+		private Hash expectedHash;
+		private File file;
 
 		private Map<Long,Integer> blocOff=new TreeMap<Long,Integer>();
 		private boolean delete=false;
 
-		public CommitDesc(FileDesc f)
+		public CommitDesc(FileDesc f, Hash hash)
 			{
 			super(threadGroup, "Commit "+f.getName());
 			fd=f;
+			expectedHash=hash;
+			file=new File(path, fd.getName().toString());
 			}
 
 		public void run()
 			{
+			Map<Integer,P> hash=new HashMap<Integer,P>();
+			for(int i=0; i<fd.getBlocCount(); i++)
+				hash.put(fd.getRoll().get(i), new P(i, fd.getHash().get(i)));
+
 			try
 				{
 				boolean done;
 				do
 					{
-					found();
+					long start=System.currentTimeMillis();
+					found(hash);
+					log.debug("computing hash %s took %d ms", fd.getName(), System.currentTimeMillis()-start);
 					synchronized (sync)
 						{
 						done=sendReconstruct();
 						}
+					long d=System.currentTimeMillis()-start;
+					log.info("updating %s took %d ms (%.3f Ko/sec)", fd.getName(), d, 1000.*file.length()/(8.*d));
+					log.debug("done: "+done);
 					}
 				while (!done);
 				}
@@ -336,12 +366,12 @@ public class SyncClient
 				}
 			}
 
-		private void found() throws IOException, NoSuchAlgorithmException
+		private void found(Map<Integer,P> hash) throws IOException, NoSuchAlgorithmException
 			{
 			try
 				{
-				System.out.println("start check "+fd.getName());
-				FileInputStream fis=new FileInputStream(new File(path, fd.getName().toString()));
+				log.debug("start check "+fd.getName());
+				FileInputStream fis=new FileInputStream(file);
 				RollingChecksum rcs=new RollingChecksum(blocSize);
 
 				MessageDigest md=MessageDigest.getInstance("SHA-512");
@@ -354,21 +384,20 @@ public class SyncClient
 				loop: while ((c=fis.read())!=-1)
 					{
 					int r=rcs.append((byte)c);
-					for(int j=0; j<fd.getRoll().size(); j++)
-						{
-						if(r==fd.getRoll().get(j))
-							{ // found match
-							Hash h=new Hash(md.digest(rcs.buf()));
-							md.reset();
-							if(h.equals(fd.getHash().get(j)))
-								{
-								blocOff.put(off, j);
 
-								for(int i=0; i<blocSize-1&&(c=fis.read())!=-1; i++)
-									rcs.append((byte)c);
-								off+=blocSize;
-								continue loop;
-								}
+					P p=hash.get(r);
+					if(p!=null)
+						{ // found match
+						Hash h=new Hash(md.digest(rcs.buf()));
+						md.reset();
+						if(h.equals(p.hash))
+							{
+							blocOff.put(off, p.i);
+
+							for(int i=0; i<blocSize-1&&(c=fis.read())!=-1; i++)
+								rcs.append((byte)c);
+							off+=blocSize;
+							continue loop;
 							}
 						}
 					off++;
@@ -387,7 +416,7 @@ public class SyncClient
 						}
 					off++;
 					}
-				System.out.println(fd.getName()+"	bloc found: "+blocOff.size()+"/"+fd.getBlocCount());
+				log.debug(fd.getName()+"	bloc found: "+blocOff.size()+"/"+fd.getBlocCount());
 				fis.close();
 				}
 			catch (FileNotFoundException e)
@@ -398,24 +427,23 @@ public class SyncClient
 
 		public boolean sendReconstruct() throws IOException
 			{
-			System.out.println("start reconstruct "+fd.getName()+" "+blocSize);
+			log.debug("start reconstruct "+fd.getName()+" "+blocSize);
 			if(delete)
 				{
-				System.out.println("	delete");
+				log.debug("	delete");
 				sync.delete(uuid, fd.getName());
 				}
 			if(blocOff.size()==fd.getBlocCount())
 				return true; // file doesnt change
-			File f=new File(path, fd.getName().toString());
-			RandomAccessFile ram=new RandomAccessFile(f, "r");
+			RandomAccessFile ram=new RandomAccessFile(file, "r");
 			sync.startAppend(uuid, fd.getName());
 			byte[] b=new byte[2048];
 
 			ByteBuffer bbuf=ByteBuffer.wrap(b);
 
-			if(blocOff.size()==0) // no bloc found file totaly changed
+			if(blocOff.size()<fd.getBlocCount()*.6)
 				{
-				System.out.println("	new");
+				log.debug("	new");
 
 				int read;
 				while ((read=ram.read(b))>0)
@@ -426,22 +454,6 @@ public class SyncClient
 				}
 			else
 				{
-//				long[] off=new long[blocOff.size()];
-//				int i=0;
-//				for(long l:blocOff.keySet())
-//					{
-//					int j=0;
-//					while (j<i&&l>off[j])
-//						j++;
-//					for(int k=i; k>j; k--)
-//						off[k]=off[k-1];
-//					off[j]=l;
-//					System.out.println(j+"/"+i+": "+l);
-//					i++;
-//					}
-//				for(i=0; i<off.length; i++)
-//					System.out.println(off[i]);
-
 				long last=0;
 				Integer bloc=null;
 				int count=0;
@@ -449,7 +461,7 @@ public class SyncClient
 					{
 					if(off<last) // TODO can be optimised
 						{
-						System.out.println("bloc over lap");
+						log.debug("bloc over lap");
 						}
 					else if(off==last)
 						{ // ok keep this bloc from org file
@@ -468,12 +480,13 @@ public class SyncClient
 							count=0;
 							}
 						long d=off-last;
-						System.out.println("	new data "+d);
+						log.debug("	new data "+d);
 
 						ram.seek(last);
 						while (d>0)
 							{
 							int read=ram.read(b, 0, (int)Math.min(b.length, d));
+							log.debug(" "+d+" "+read);
 							bbuf.limit(read);
 							d-=read;
 							sync.appendData(uuid, bbuf);
@@ -487,10 +500,10 @@ public class SyncClient
 					bloc=null;
 					count=0;
 					}
-				if(last<f.length())
+				if(last<file.length())
 					{
-					long d=f.length()-last;
-					System.out.println("	new fdata "+d);
+					long d=file.length()-last;
+					log.debug("	new fdata "+d);
 					ram.seek(last);
 					while (d>0)
 						{
@@ -502,7 +515,7 @@ public class SyncClient
 					}
 				}
 			ram.close();
-			Object o=sync.endAppend(uuid, fd.getFileHash());
+			Object o=sync.endAppend(uuid, expectedHash);
 			if(o instanceof FileDesc)
 				{
 				fd=(FileDesc)o;
@@ -514,7 +527,6 @@ public class SyncClient
 
 	public static void main(String arg[]) throws Exception
 		{
-		System.out.println(Arrays.toString(arg));
 		String host=null;
 		int port=54323;
 		String path="./";
@@ -536,27 +548,27 @@ public class SyncClient
 				path=args.nextValue();
 			else if(a.equals("help"))
 				{
-				System.out.println("usage: <option> <cmd> <project>");
-				System.out.println("Option");
-				System.out.println("	-H <host> |--host=<host>");
-				System.out.println("		Set the server host to use (required).");
-				System.out.println("	-P <port> | --port=<port>");
-				System.out.println("		Set the port to use, use the default port if not specified");
-				System.out.println("	-l <login> | --login=<login>");
-				System.out.println("		Set login.");
-				System.out.println("	-p <pass> | --pass=<pass>");
-				System.out.println("	-d <path> | --path=<path>");
-				System.out.println("	--help");
-				System.out.println("		This help.");
-				System.out.println("Command");
-				System.out.println("	update");
-				System.out.println("	commit");
+				log.info("usage: <option> <cmd> <project>");
+				log.info("Option");
+				log.info("	-H <host> |--host=<host>");
+				log.info("		Set the server host to use (required).");
+				log.info("	-P <port> | --port=<port>");
+				log.info("		Set the port to use, use the default port if not specified");
+				log.info("	-l <login> | --login=<login>");
+				log.info("		Set login.");
+				log.info("	-p <pass> | --pass=<pass>");
+				log.info("	-d <path> | --path=<path>");
+				log.info("	--help");
+				log.info("		This help.");
+				log.info("Command");
+				log.info("	update");
+				log.info("	commit");
 				return;
 				}
 			}
 		if(host==null)
 			{
-			System.out.println("host required");
+			log.error("host required");
 			return;
 			}
 		SyncClient cl=new SyncClient(host, port, path);
@@ -564,18 +576,18 @@ public class SyncClient
 			{
 			if(!cl.login(login, pass==null?"":pass))
 				{
-				System.out.println("login fail");
+				log.error("login fail");
 				return;
 				}
 			}
 		String str=args.left();
 
 		if(str.equalsIgnoreCase("update"))
-			System.out.println("return: "+cl.update(args.left()));
+			log.error("return: "+cl.update(args.left()));
 		else if(str.equalsIgnoreCase("commit"))
-			System.out.println("return: "+cl.commit(args.left()));
+			log.error("return: "+cl.commit(args.left()));
 		else
-			System.out.println("invalid command");
+			log.error("invalid command");
 		cl.close();
 		}
 	}
