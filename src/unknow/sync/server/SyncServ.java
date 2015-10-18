@@ -405,6 +405,8 @@ public class SyncServ
 				while (l>0)
 					{
 					int read=s.orgFile.read(buf);
+					if(read==-1)
+						break;
 					s.fos.write(buf, 0, read);
 					l-=read;
 					}

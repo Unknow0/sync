@@ -466,14 +466,18 @@ public class SyncClient
 					}
 				// test with padding
 				int lastRoll=fd.getRoll().get(fd.getRoll().size()-1);
+				Hash lastHash=fd.getHash().get(fd.getRoll().size()-1);
 				for(int i=0; i<blocSize; i++)
 					{
 					int r=rcs.append((byte)0);
 					if(r==lastRoll)
 						{ // found match
 						Hash h=new Hash(md.digest(rcs.buf()));
-						if(h.equals(fd.getHash().get(fd.getRoll().size()-1)))
+						if(h.equals(lastHash))
+							{
 							blocOff.put(off, fd.getRoll().size()-1);
+							break;
+							}
 						md.reset();
 						}
 					off++;
@@ -497,8 +501,9 @@ public class SyncClient
 				}
 			if(blocOff.size()==fd.getBlocCount())
 				return true; // file doesnt change
+			if(!sync.startAppend(uuid, fd.getName()))
+				return false;
 			RandomAccessFile ram=new RandomAccessFile(file, "r");
-			sync.startAppend(uuid, fd.getName());
 			byte[] b=new byte[2048];
 
 			ByteBuffer bbuf=ByteBuffer.wrap(b);
@@ -521,19 +526,14 @@ public class SyncClient
 				int count=0;
 				for(long off:blocOff.keySet())
 					{
-					if(off<last) // TODO can be optimised
-						{
-						log.debug("bloc over lap");
-						}
-					else if(off==last)
+					if(off==last)
 						{ // ok keep this bloc from org file
 						if(bloc==null)
 							bloc=blocOff.get(off);
 						count++;
 						last+=blocSize;
 						}
-					else
-						// new data
+					else if(off>last) // new data
 						{
 						if(bloc!=null)
 							{
