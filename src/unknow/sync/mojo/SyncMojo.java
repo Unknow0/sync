@@ -5,8 +5,7 @@ import org.apache.maven.plugin.*;
 public abstract class SyncMojo extends AbstractMojo
 	{
 	/**
-	 * @parameter
-	 *         default-value="${project.build.directory}"
+	 * @parameter default-value="${project.build.directory}"
 	 */
 	protected String baseDir;
 
@@ -32,4 +31,14 @@ public abstract class SyncMojo extends AbstractMojo
 	 * @parameter
 	 */
 	protected String[] match;
+
+	/**
+	 * @parameter default-value="anonymous"
+	 */
+	protected String login;
+
+	/**
+	 * @parameter default-value=""
+	 */
+	protected String password;
 	}

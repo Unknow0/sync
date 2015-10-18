@@ -15,7 +15,8 @@ public class UpdateMojo extends SyncMojo
 		try
 			{
 			SyncClient sync=new SyncClient(host, port, baseDir);
-			sync.update(project, StringTools.collapse(match, "|"));
+			sync.login(login, password);
+			sync.update(project, match==null?null:StringTools.collapse(match, "|"));
 			sync.close();
 			}
 		catch (Exception e)

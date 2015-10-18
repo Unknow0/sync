@@ -15,7 +15,8 @@ public class CommitMojo extends SyncMojo
 		try
 			{
 			SyncClient sync=new SyncClient(host, port, baseDir);
-			sync.commit(project, StringTools.collapse(match, "|"));
+			sync.login(login, password);
+			sync.commit(project, match==null?null:StringTools.collapse(match, "|"));
 			sync.close();
 			}
 		catch (Exception e)
