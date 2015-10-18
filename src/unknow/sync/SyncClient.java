@@ -6,6 +6,7 @@ import java.nio.*;
 import java.nio.file.*;
 import java.security.*;
 import java.util.*;
+import java.util.regex.*;
 
 import org.apache.avro.ipc.*;
 import org.apache.avro.ipc.specific.*;
@@ -33,6 +34,8 @@ public class SyncClient
 
 	private UUID uuid;
 
+	private UpdateListener listener;
+
 	public SyncClient(String host, int port, String p) throws UnknownHostException, IOException
 		{
 		path=p;
@@ -52,21 +55,47 @@ public class SyncClient
 
 	public int update(String project) throws IOException, InterruptedException
 		{
+		return update(project, null);
+		}
+
+	public int update(String project, String regexp) throws IOException, InterruptedException
+		{
 		ProjectInfo info=sync.selectProject(uuid, project);
 		blocSize=info.getBlocSize();
 		log.debug("bloc size: "+blocSize);
 		log.debug("file count: "+info.getFileDescs().size());
 
+		if(listener!=null)
+			listener.startUpdate(project, info.getFileDescs().size());
+
+		Matcher m=null;
+		if(regexp!=null)
+			{
+			m=Pattern.compile(regexp).matcher("");
+			}
 		for(FileDesc f:info.getFileDescs())
 			{
+			if(m!=null)
+				{
+				m.reset(f.getName());
+				if(!m.matches())
+					continue;
+				}
 			UpdateDesc updateDesc=new UpdateDesc(f);
 			updateDesc.start();
 			}
 		threadGroup.join();
+		if(listener!=null)
+			listener.doneUpdate(project);
 		return 0;
 		}
 
 	public int commit(String project) throws NoSuchAlgorithmException, IOException, InterruptedException
+		{
+		return commit(project, null);
+		}
+
+	public int commit(String project, String regexp) throws NoSuchAlgorithmException, IOException, InterruptedException
 		{
 		ProjectInfo info=sync.selectProject(uuid, project);
 		blocSize=info.getBlocSize();
@@ -74,10 +103,18 @@ public class SyncClient
 		Set<FileDesc> set=new HashSet<FileDesc>();
 		Common.load(set, path, "", blocSize);
 
+		Matcher m=Pattern.compile(regexp).matcher("");
+
 		List<FileDesc> fileDescs=info.getFileDescs();
 		log.debug("file count: "+fileDescs.size()+" / "+set.size());
 		l1: for(FileDesc desc:fileDescs)
 			{
+			if(m!=null)
+				{
+				m.reset(desc.getName());
+				if(!m.matches())
+					continue;
+				}
 			Iterator<FileDesc> it=set.iterator();
 			while (it.hasNext())
 				{
@@ -98,6 +135,12 @@ public class SyncClient
 			}
 		for(FileDesc fd:set)
 			{
+			if(m!=null)
+				{
+				m.reset(fd.getName());
+				if(!m.matches())
+					continue;
+				}
 			synchronized (sync)
 				{
 				File f=new File(path, fd.getName().toString());
@@ -155,15 +198,25 @@ public class SyncClient
 					blocFound.clear();
 					long start=System.currentTimeMillis();
 					found(hash);
+
+					if(listener!=null)
+						listener.startCheckFile(fd.getName(), fd.getBlocCount());
 					log.debug("computing hash %s took %d ms", fd.getName(), System.currentTimeMillis()-start);
+					if(listener!=null)
+						listener.doneCheckFile(fd.getName(), fd.getBlocCount()-blocFound.size());
 					synchronized (sync)
 						{
 						done=reconstruct();
 						}
 					long d=System.currentTimeMillis()-start;
+					if(listener!=null)
+						listener.doneReconstruct(fd.getName(), done);
 					log.info("updating %s took %d ms (%.3f Ko/sec)", fd.getName(), d, 1000.*file.length()/(8.*d));
 					}
 				while (!done);
+
+				if(listener!=null)
+					listener.doneFile(fd.getName());
 				}
 			catch (NoSuchAlgorithmException e)
 				{
@@ -185,6 +238,8 @@ public class SyncClient
 
 				MessageDigest md=MessageDigest.getInstance("SHA-512");
 
+				long len=file.length();
+
 				/** read first block */
 				int c;
 				for(int i=0; i<blocSize-1&&(c=fis.read())!=-1; i++)
@@ -201,6 +256,8 @@ public class SyncClient
 						md.reset();
 						}
 					off++;
+					if(listener==null&&off%blocSize==0)
+						listener.updateCheck(fd.getName(), 1f*off/len);
 					}
 				// test with padding
 				for(int i=0; i<blocSize-1; i++)
@@ -235,25 +292,30 @@ public class SyncClient
 
 				if(blocFound.size()<fd.getBlocCount()*.6)
 					{ // download full file
-					log.debug("'"+fd.getName()+"' new");
-					ByteBuffer data=sync.getFile(uuid, fd.getName());
-					if(data==null)
+					log.debug("'%s' new", fd.getName());
+					Long len=sync.getFile(uuid, fd.getName());
+					long off=0;
+					if(len==null)
 						{
 						log.debug("failed to get file");
 						return false;
 						}
 					byte buf[]=new byte[2048];
-					do
+					ByteBuffer data=sync.getNext(uuid);
+					while (data!=null)
 						{
+						off+=data.limit();
 						if(data.limit()>buf.length)
 							buf=new byte[data.limit()];
 						data.get(buf, 0, data.limit());
 						fos.write(buf, 0, data.limit());
 						md.update(buf, 0, data.limit());
 
+						if(listener!=null)
+							listener.updateReconstruct(fd.getName(), 1f*off/len);
+
 						data=sync.getNext(uuid);
 						}
-					while (data!=null);
 					}
 				else
 					{
@@ -523,6 +585,11 @@ public class SyncClient
 				}
 			return (Boolean)o;
 			}
+		}
+
+	public void setListener(UpdateListener listener)
+		{
+		this.listener=listener;
 		}
 
 	public static void main(String arg[]) throws Exception

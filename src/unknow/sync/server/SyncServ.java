@@ -162,7 +162,7 @@ public class SyncServ
 				}
 			}
 
-		public ByteBuffer getFile(UUID uuid, CharSequence file) throws AvroRemoteException
+		public Long getFile(UUID uuid, CharSequence file) throws AvroRemoteException
 			{
 			State s=states.get(uuid);
 			if(s!=null)
@@ -178,10 +178,8 @@ public class SyncServ
 				if(f.isFile())
 					{
 					System.out.println("sending file "+file);
-					byte[] buf=new byte[2048];
 					s.fis=new FileInputStream(f);
-					int l=s.fis.read(buf);
-					return ByteBuffer.wrap(buf, 0, l);
+					return f.length();
 					}
 				}
 			catch (Exception e)

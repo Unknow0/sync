@@ -57,7 +57,7 @@
 				{"name": "uuid", "type": "UUID"},
 				{"name": "file", "type": "string"}
 			],
-			"response": ["null", "bytes"]
+			"response": ["null", "long"]
 		},
 		"getNext": {
 			"request": [
