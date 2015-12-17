@@ -2,24 +2,27 @@ package unknow.sync.mojo;
 
 import org.apache.maven.plugin.*;
 
-import unknow.common.tools.*;
 import unknow.sync.*;
 
 /**
- * @goal commit
+ * @goal update
  */
-public class CommitMojo extends SyncMojo
+public class UpdateMojo extends SyncMojo
 	{
+	/**
+	 * @parameter default-value=false
+	 */
+	private boolean delete;
+
 	public void execute() throws MojoExecutionException, MojoFailureException
 		{
 		try
 			{
 			SyncClient sync=new SyncClient(host, port, baseDir);
-			sync.login(login, password);
-			sync.commit(project, match==null?null:StringTools.collapse(match, "|"));
+			sync.update(login, password, project, delete);
 			sync.close();
 			}
-		catch (Exception e)
+		catch (Throwable e)
 			{
 			throw new MojoExecutionException("", e);
 			}
