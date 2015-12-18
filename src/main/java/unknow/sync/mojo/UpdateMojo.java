@@ -19,7 +19,8 @@ public class UpdateMojo extends SyncMojo
 		try
 			{
 			SyncClient sync=new SyncClient(host, port, baseDir);
-			sync.update(login, password, project, delete);
+			sync.setListener(new SyncListener.Log());
+			sync.update(login, password, project, delete, match());
 			sync.close();
 			}
 		catch (Throwable e)

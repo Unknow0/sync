@@ -144,7 +144,7 @@
 				{"name": "uuid", "type": "UUID"},
 				{"name": "hash", "type": "Hash"}
 			],
-			"response": "FileDesc"
+			"response": ["null", "FileDesc"]
 		},
 		"delete":{
 			"request":[

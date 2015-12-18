@@ -76,8 +76,8 @@ public class FileDescLoader
 		MessageDigest md=MessageDigest.getInstance("SHA-512");
 		MessageDigest fileMd=MessageDigest.getInstance("SHA-512");
 
-		FileDesc desc=new FileDesc(root.relativize(file).toString(), new ArrayList<Bloc>(), null);
-		try (FileInputStream fis=new FileInputStream(file.toString()))
+		FileDesc desc=new FileDesc(file.toString(), new ArrayList<Bloc>(), null);
+		try (FileInputStream fis=new FileInputStream(root.resolve(file).toString()))
 			{
 			byte[] buf=new byte[blocSize];
 			byte[] h;
@@ -157,7 +157,7 @@ public class FileDescLoader
 
 		public FileDesc call() throws Exception
 			{
-			return loadFile(root, file, blocSize);
+			return loadFile(root, root.relativize(file), blocSize);
 			}
 		}
 

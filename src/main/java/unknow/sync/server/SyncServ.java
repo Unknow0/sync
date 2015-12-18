@@ -3,6 +3,7 @@ package unknow.sync.server;
 import java.io.*;
 import java.net.*;
 import java.nio.*;
+import java.nio.file.*;
 import java.security.*;
 import java.util.*;
 
@@ -40,6 +41,7 @@ public class SyncServ
 		RandomAccessFile orgFile=null;
 		FileOutputStream fos=null;
 		UUID uuid;
+		Action action;
 		}
 
 	public SyncServ(Cfg c) throws JsonException, IOException, NoSuchAlgorithmException
@@ -164,6 +166,7 @@ public class SyncServ
 				exception("no right");
 
 			State s=nextState();
+			s.action=action;
 			s.project=p;
 			return new LoginRes(s.uuid, p.projectInfo());
 			}
@@ -186,7 +189,7 @@ public class SyncServ
 		public ByteBuffer getBloc(UUID uuid, String file, int bloc, int count) throws SyncException
 			{
 			State s=states.get(uuid);
-			if(s==null)
+			if(s==null||s.action!=Action.read)
 				exception("invalide state");
 
 			RandomAccessFile ram=null;
@@ -230,7 +233,7 @@ public class SyncServ
 		public ByteBuffer getFile(UUID uuid, String file, long offset) throws AvroRemoteException
 			{
 			State s=states.get(uuid);
-			if(s==null)
+			if(s==null||s.action!=Action.read)
 				exception("invalide state");
 			try
 				{
@@ -260,7 +263,7 @@ public class SyncServ
 		public Void startAppend(UUID uuid, String file) throws AvroRemoteException
 			{
 			State s=states.get(uuid);
-			if(s==null)
+			if(s==null||s.action!=Action.write)
 				exception("invalide state");
 			try
 				{
@@ -307,7 +310,7 @@ public class SyncServ
 		public boolean appendData(UUID uuid, ByteBuffer data) throws AvroRemoteException
 			{
 			State s=states.get(uuid);
-			if(s==null||s.fos==null)
+			if(s==null||s.fos==null||s.action!=Action.write)
 				exception("invalide state");
 			try
 				{
@@ -325,7 +328,7 @@ public class SyncServ
 			{
 			State s=states.get(uuid);
 
-			if(s==null||s.fos==null)
+			if(s==null||s.fos==null||s.action!=Action.write)
 				exception("invalide state");
 			try
 				{
@@ -354,7 +357,7 @@ public class SyncServ
 			{
 			State s=states.get(uuid);
 
-			if(s==null||s.fos==null)
+			if(s==null||s.fos==null||s.action!=Action.write)
 				exception("invalide state");
 			try
 				{
@@ -378,6 +381,7 @@ public class SyncServ
 					log.warn("failed to close tmpfile file", e);
 					}
 				String file=s.appendFile;
+				Files.move(s.tmp.toPath(), Paths.get(s.project.path(), file));
 				FileDesc fd=s.project.reloadFile(file);
 				s.appendFile=null;
 				s.orgFile=null;
@@ -396,7 +400,7 @@ public class SyncServ
 			{
 			State s=states.get(uuid);
 
-			if(s==null)
+			if(s==null||s.action!=Action.write)
 				exception("invalide state");
 			try
 				{
