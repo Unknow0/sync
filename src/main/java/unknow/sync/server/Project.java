@@ -30,7 +30,7 @@ public class Project
 			{
 			files=new ArrayList<FileDesc>();
 			projectInfo=new ProjectInfo(cfg.getInt("bloc_size"), new ArrayList<FileHash>());
-			FileDescLoader.load(files, root, projectInfo.getBlocSize());
+			FileDescLoader.load(files, root, projectInfo.getBlocSize(), null);
 			for(FileDesc fd:files)
 				{
 				projectInfo.getHashs().add(new FileHash(fd.getName(), fd.getFileHash()));

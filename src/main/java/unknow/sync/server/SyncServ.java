@@ -381,7 +381,7 @@ public class SyncServ
 					log.warn("failed to close tmpfile file", e);
 					}
 				String file=s.appendFile;
-				Files.move(s.tmp.toPath(), Paths.get(s.project.path(), file));
+				Files.move(s.tmp.toPath(), Paths.get(s.project.path(), file), StandardCopyOption.REPLACE_EXISTING);
 				FileDesc fd=s.project.reloadFile(file);
 				s.appendFile=null;
 				s.orgFile=null;

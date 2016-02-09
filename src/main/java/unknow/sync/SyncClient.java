@@ -42,7 +42,7 @@ public class SyncClient
 		sync=SpecificRequestor.getClient(Sync.class, client);
 		}
 
-	public void update(String login, String pass, String project, boolean delete, Pattern[] match) throws IOException, InterruptedException, NoSuchAlgorithmException
+	public void update(String login, String pass, String project, boolean delete, Pattern pattern) throws IOException, InterruptedException, NoSuchAlgorithmException
 		{
 		LoginRes res=sync.login(login, pass, project, Action.read);
 		uuid=res.getUuid();
@@ -51,23 +51,17 @@ public class SyncClient
 		blocSize=info.getBlocSize();
 
 		Set<FileDesc> files=new HashSet<FileDesc>();
-		FileDescLoader.load(files, path, blocSize);
-		if(match!=null&&match.length>0)
-			{
-			Iterator<FileDesc> it=files.iterator();
-			while (it.hasNext())
-				{
-				FileDesc next=it.next();
-				if(!match(match, next.getName()))
-					it.remove();
-				}
-			}
+		FileDescLoader.load(files, path, blocSize, pattern);
+
+		Matcher m=pattern==null?null:pattern.matcher("");
 
 		Map<String,IndexedHash> map=new HashMap<String,IndexedHash>((int)Math.ceil(info.getHashs().size()/.75));
 		for(int i=0; i<info.getHashs().size(); i++)
 			{
 			FileHash h=info.getHashs().get(i);
-			if(match==null||match.length==0||match(match, h.getName()))
+			if(m!=null)
+				m.reset(h.getName());
+			if(m==null||m.matches())
 				map.put(h.getName(), new IndexedHash(i, h.getHash()));
 			}
 
@@ -140,7 +134,7 @@ public class SyncClient
 			listener.doneUpdate(project);
 		}
 
-	public void commit(String login, String pass, String project, Pattern[] match) throws NoSuchAlgorithmException, IOException, InterruptedException
+	public void commit(String login, String pass, String project, Pattern pattern) throws NoSuchAlgorithmException, IOException, InterruptedException
 		{
 		LoginRes res=sync.login(login, pass, project, Action.write);
 		uuid=res.getUuid();
@@ -149,23 +143,17 @@ public class SyncClient
 		blocSize=info.getBlocSize();
 
 		Set<FileDesc> files=new HashSet<FileDesc>();
-		FileDescLoader.load(files, path, blocSize);
+		FileDescLoader.load(files, path, blocSize, pattern);
 
-		if(match!=null&&match.length>0)
-			{
-			Iterator<FileDesc> it=files.iterator();
-			while (it.hasNext())
-				{
-				FileDesc next=it.next();
-				if(!match(match, next.getName()))
-					it.remove();
-				}
-			}
+		Matcher m=pattern==null?null:pattern.matcher("");
+
 		Map<String,IndexedHash> map=new HashMap<String,IndexedHash>((int)Math.ceil(info.getHashs().size()/.75));
 		for(int i=0; i<info.getHashs().size(); i++)
 			{
 			FileHash h=info.getHashs().get(i);
-			if(match==null||match.length==0||match(match, h.getName()))
+			if(m!=null)
+				m.reset(h.getName());
+			if(m==null||m.matches())
 				map.put(h.getName(), new IndexedHash(i, h.getHash()));
 			}
 
@@ -187,6 +175,9 @@ public class SyncClient
 			else if(p!=null)
 				list.add(p.i);
 			}
+
+		if(listener!=null)
+			listener.startUpdate(project, files.size(), fileToCreate.size(), map.size());
 
 		// get modified file desc
 		List<FileDesc> l=sync.getFileDescs(uuid, list);
@@ -220,17 +211,9 @@ public class SyncClient
 
 		for(Map.Entry<String,IndexedHash> e:map.entrySet())
 			sync.delete(uuid, e.getKey());
-		}
-
-	private boolean match(Pattern[] p, String name)
-		{
-		for(int i=0; i<p.length; i++)
-			{
-			Matcher m=p[i].matcher(name);
-			if(m.matches())
-				return true;
-			}
-		return false;
+		
+		if(listener!=null)
+			listener.doneUpdate(project);
 		}
 
 	public void close()

@@ -44,13 +44,17 @@ public abstract class SyncMojo extends AbstractMojo
 	 */
 	protected String password;
 
-	protected Pattern[] match()
+	protected Pattern pattern()
 		{
-		if(match==null)
+		if(match==null||match.length==0)
 			return null;
-		Pattern[] p=new Pattern[match.length];
-		for(int i=0; i<p.length; i++)
-			p[i]=Pattern.compile(match[i]);
-		return p;
+		if(match.length==1)
+			return Pattern.compile(match[0]);
+
+		StringBuilder sb=new StringBuilder();
+		sb.append("(?:").append(match[0]).append(")");
+		for(int i=1; i<match.length; i++)
+			sb.append("|(?:").append(match[i]).append(")");
+		return Pattern.compile(sb.toString());
 		}
 	}

@@ -15,7 +15,7 @@ public class CommitMojo extends SyncMojo
 			{
 			SyncClient sync=new SyncClient(host, port, baseDir);
 			sync.setListener(new SyncListener.Log());
-			sync.commit(login, password, project, match());
+			sync.commit(login, password, project, pattern());
 			sync.close();
 			}
 		catch (Exception e)

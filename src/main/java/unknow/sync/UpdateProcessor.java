@@ -153,11 +153,14 @@ public class UpdateProcessor
 				while (i<bc&&blocs[bi]==i)
 					{
 					int s=ram.read(buf);
-					while (s<client.blocSize&&(c=ram.read())!=-1)
-						buf[s++]=(byte)c;
+					if(s>=0)
+						{
+						while (s<buf.length&&(c=ram.read())!=-1)
+							buf[s++]=(byte)c;
 
-					fos.write(buf, 0, s);
-					md.update(buf, 0, s);
+						fos.write(buf, 0, s);
+						md.update(buf, 0, s);
+						}
 					bi++;
 					i++;
 					}

@@ -33,9 +33,18 @@ public class CommitProcessor
 			do
 				{
 				blocFound.clear();
-				findBloc(client.blocSize, hash, blocFound, local, server, file);
 
+				if(client.listener!=null)
+					client.listener.startCheckFile(local.getName());
+				findBloc(client.blocSize, hash, blocFound, local, server, file);
+				if(client.listener!=null)
+					client.listener.doneCheckFile(local.getName());
+
+				if(client.listener!=null)
+					client.listener.startReconstruct(local.getName());
 				FileDesc n=sendReconstruct(client, blocFound, server, local.getFileHash(), file);
+				if(client.listener!=null)
+					client.listener.doneReconstruct(local.getName(), file.length(), n==null);
 				if(n==null)
 					done=true;
 				else
@@ -206,7 +215,10 @@ public class CommitProcessor
 	public static void send(SyncClient client, FileDesc local) throws IOException
 		{
 		FileDesc server=null;
+		if(client.listener!=null)
+			client.listener.startReconstruct(local.getName());
 		client.startAppend(local.getName());
+		long fileSize=0;
 		try (FileInputStream fis=new FileInputStream(client.path.resolve(local.getName()).toFile()))
 			{
 			byte[] buf=new byte[128*1024];
@@ -214,11 +226,14 @@ public class CommitProcessor
 			int l;
 			while ((l=fis.read(buf))>0)
 				{
+				fileSize+=l;
 				bbuf.limit(l);
 				client.appendData(bbuf);
 				}
 			server=client.endAppend(local.getFileHash());
 			}
+		if(client.listener!=null)
+			client.listener.doneReconstruct(local.getName(), fileSize, server==null);
 		if(server!=null)
 			commit(client, local, server);
 		}

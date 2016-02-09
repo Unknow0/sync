@@ -6,6 +6,7 @@ import java.nio.file.attribute.*;
 import java.security.*;
 import java.util.*;
 import java.util.concurrent.*;
+import java.util.regex.*;
 
 import org.apache.logging.log4j.*;
 
@@ -16,9 +17,10 @@ public class FileDescLoader
 	private static final Logger log=LogManager.getFormatterLogger(FileDescLoader.class);
 	private static final ExecutorService exec=Executors.newCachedThreadPool();
 
-	public static void load(Collection<FileDesc> files, Path root, int blocSize) throws IOException
+	public static void load(Collection<FileDesc> files, Path root, int blocSize, Pattern pattern) throws IOException
 		{
-		Visitor visitor=new Visitor(root, blocSize);
+		root=root.toAbsolutePath().normalize();
+		Visitor visitor=new Visitor(root, blocSize, pattern);
 		Files.walkFileTree(root, visitor);
 		for(Future<FileDesc> future:visitor.futures())
 			{
@@ -106,23 +108,32 @@ public class FileDescLoader
 		{
 		private Path root;
 		private int blocSize;
+		private Matcher m;
 		private List<Future<FileDesc>> futures=new ArrayList<>();
 
-		public Visitor(Path root, int blocFile)
+		public Visitor(Path root, int blocFile, Pattern pattern)
 			{
 			this.root=root;
 			this.blocSize=blocFile;
+			this.m=pattern==null?null:pattern.matcher("");
 			}
 
 		public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) throws IOException
 			{
-			return FileVisitResult.CONTINUE;
+			if(m!=null)
+				m.reset(root.relativize(dir).toString());
+			return m==null||m.matches()||m.hitEnd()?FileVisitResult.CONTINUE:FileVisitResult.SKIP_SUBTREE;
 			}
 
 		public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException
 			{
 			if(attrs.isRegularFile())
-				futures.add(exec.submit(new FileLoader(root, file, blocSize)));
+				{
+				if(m!=null)
+					m.reset(root.relativize(file).toString());
+				if(m==null||m.matches())
+					futures.add(exec.submit(new FileLoader(root, file, blocSize)));
+				}
 			return FileVisitResult.CONTINUE;
 			}
 
