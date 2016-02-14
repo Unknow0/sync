@@ -138,7 +138,7 @@ public class SyncServ
 		{
 		SyncException e=new SyncException();
 		e.setDesc(desc);
-		log.error(desc, e);
+		log.error(desc);
 		throw e;
 		}
 
@@ -146,7 +146,7 @@ public class SyncServ
 		{
 		SyncException e=new SyncException();
 		e.setDesc("Unexpected Error");
-		log.error("", cause);
+		log.error("Unexpected Error", cause);
 		throw e;
 		}
 

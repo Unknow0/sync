@@ -22,7 +22,7 @@ import unknow.sync.proto.UUID;
  * 
  * @author Unknow
  */
-public class SyncClient
+public class SyncClient implements AutoCloseable
 	{
 	private static final Logger log=LogManager.getFormatterLogger(SyncClient.class);
 	protected Path path;
@@ -42,7 +42,7 @@ public class SyncClient
 		sync=SpecificRequestor.getClient(Sync.class, client);
 		}
 
-	public void update(String login, String pass, String project, boolean delete, Pattern pattern) throws IOException, InterruptedException, NoSuchAlgorithmException
+	public void update(String login, String pass, String project, boolean delete, Pattern pattern) throws IOException, InterruptedException, NoSuchAlgorithmException, SyncException
 		{
 		LoginRes res=sync.login(login, pass, project, Action.read);
 		uuid=res.getUuid();
@@ -134,7 +134,7 @@ public class SyncClient
 			listener.doneUpdate(project);
 		}
 
-	public void commit(String login, String pass, String project, Pattern pattern) throws NoSuchAlgorithmException, IOException, InterruptedException
+	public void commit(String login, String pass, String project, Pattern pattern) throws NoSuchAlgorithmException, IOException, InterruptedException, SyncException
 		{
 		LoginRes res=sync.login(login, pass, project, Action.write);
 		uuid=res.getUuid();
