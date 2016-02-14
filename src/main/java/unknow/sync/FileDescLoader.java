@@ -92,8 +92,9 @@ public class FileDescLoader
 				fileMd.update(buf, 0, s);
 
 				// padding
+				byte p=0;
 				while (s<buf.length)
-					buf[s++]=0;
+					buf[s++]=++p;
 				h=md.digest(buf);
 				Bloc bloc=new Bloc(RollingChecksum.compute(buf), new Hash(h));
 				desc.getBlocs().add(bloc);

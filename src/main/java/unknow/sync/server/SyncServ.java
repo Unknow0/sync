@@ -208,7 +208,7 @@ public class SyncServ
 					while (c<toRead&&(l=ram.read(buf, c, toRead-c))>=0)
 						c+=l;
 
-					return ByteBuffer.wrap(buf);
+					return ByteBuffer.wrap(buf, 0, c);
 					}
 				exception("invalid file '"+file+"'");
 				}

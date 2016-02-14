@@ -101,9 +101,10 @@ public class UpdateProcessor
 				}
 			// test with padding
 			Bloc last=server.getBlocs().get(server.getBlocs().size()-1);
+			byte p=0;
 			for(int i=0; i<blocSize-1; i++)
 				{
-				int r=rcs.append((byte)0);
+				int r=rcs.append(++p);
 				if(r==last.getRoll())
 					{ // found match
 					md.reset();
@@ -130,19 +131,18 @@ public class UpdateProcessor
 		try (FileOutputStream fos=new FileOutputStream(tmp);
 				RandomAccessFile ram=new RandomAccessFile(file, "r");)
 			{
-
-			int bi=0;
-			int i=0;
+			int bi=0; // index of next bloc found
+			int i=0; // index of current bloc
 			byte[] buf=new byte[client.blocSize];
 
 			int bc=server.getBlocs().size();
-			while (i<bc)
+			while (i<bc&&bi<blocs.length)
 				{
 				int len=blocs[bi]-i;
 				if(len>0) // blocs need to be retreiving from server
 					{
 					ByteBuffer bb=client.getBloc(server.getName(), i, len);
-					byte[] array=new byte[bb.remaining()];
+					byte[] array=new byte[bb.remaining()]; // todo reuse array
 					bb.get(array);
 					fos.write(array);
 					md.update(array);
@@ -150,7 +150,7 @@ public class UpdateProcessor
 					}
 				ram.seek(blocFound.get(i));
 				int c=0;
-				while (i<bc&&blocs[bi]==i)
+				while (i<bc&&bi<blocs.length&&blocs[bi]==i) // append consecutive already found bloc
 					{
 					int s=ram.read(buf);
 					if(s>=0)
@@ -161,21 +161,22 @@ public class UpdateProcessor
 						fos.write(buf, 0, s);
 						md.update(buf, 0, s);
 						}
+					// TODO check if we really are on the last bloc?
 					bi++;
 					i++;
 					}
 				}
+			if(i<bc) // file on server has bloc remaining
+				{
+				ByteBuffer bb=client.getBloc(server.getName(), i, bc-i);
+				byte[] array=new byte[bb.remaining()]; // todo reuse array
+				bb.get(array);
+				fos.write(array);
+				md.update(array);
+				}
 			}
 
 		byte[] digest=md.digest();
-
-		try (FileInputStream fis=new FileInputStream(tmp))
-			{
-			byte[] buf=new byte[1024];
-			int l;
-			while ((l=fis.read(buf))>=0)
-				md.update(buf, 0, l);
-			}
 
 		Files.move(Paths.get(tmp.getPath()), Paths.get(file.getPath()), StandardCopyOption.REPLACE_EXISTING);
 

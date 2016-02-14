@@ -69,7 +69,7 @@ public interface SyncListener
 
 		public void doneReconstruct(String name, long fileSize, boolean ok)
 			{
-			double sec=(System.currentTimeMillis()-local)/100.;
+			double sec=(System.currentTimeMillis()-local)/1000.;
 			log.info("Finished reconstructing '%s' in %.3f sec (%.3f Ko/sec)", name, sec, fileSize/1024./sec);
 			if(!ok)
 				log.warn("File '%s' hash missmatched retry.", name);
@@ -77,14 +77,14 @@ public interface SyncListener
 
 		public void doneFile(String name, long fileSize)
 			{
-			double sec=(System.currentTimeMillis()-file)/100.;
+			double sec=(System.currentTimeMillis()-file)/1000.;
 			totalSize+=fileSize;
 			log.info("Finished update for '%s' in %.3f sec (%.3f Ko/sec)", name, sec, fileSize/1024./sec);
 			}
 
 		public void doneUpdate(String project)
 			{
-			double sec=(System.currentTimeMillis()-start)/100.;
+			double sec=(System.currentTimeMillis()-start)/1000.;
 			log.info("Done updating '%s' in %.3f (%.3f Ko/sec)", project, sec, totalSize/1024./sec);
 			}
 		}

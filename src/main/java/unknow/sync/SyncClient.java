@@ -224,6 +224,7 @@ public class SyncClient implements AutoCloseable
 	public boolean getFile(File file, String name, Hash h) throws IOException, NoSuchAlgorithmException
 		{
 		MessageDigest md=MessageDigest.getInstance("SHA-512");
+		file.getParentFile().mkdirs();
 		try (FileOutputStream fos=new FileOutputStream(file))
 			{
 			byte[] buf=new byte[0];

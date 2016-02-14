@@ -117,9 +117,10 @@ public class CommitProcessor
 				}
 			// test with padding
 			Bloc last=server.getBlocs().get(server.getBlocs().size()-1);
+			byte p=0;
 			for(int i=0; i<blocSize; i++)
 				{
-				int r=rcs.append((byte)0);
+				int r=rcs.append(++p);
 				if(r==last.getRoll())
 					{ // found match
 					Hash h=new Hash(md.digest(rcs.buf()));
