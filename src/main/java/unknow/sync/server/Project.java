@@ -26,6 +26,12 @@ public class Project
 		cfg=c;
 		name=prj;
 		root=Paths.get(cfg.getString("path"));
+
+		if(!Files.exists(root))
+			{
+			log.warn("root directory of '%s' not found creating '%s'", name, root);
+			Files.createDirectories(root);
+			}
 		if(Files.isDirectory(root))
 			{
 			files=new ArrayList<FileDesc>();

@@ -191,9 +191,9 @@ public class SyncClient
 					{
 					if(listener!=null)
 						listener.startFile(local.getName());
-					CommitProcessor.commit(this, local, server);
+					long fileSize=CommitProcessor.commit(this, local, server);
 					if(listener!=null)
-						listener.doneFile(local.getName(), 0);
+						listener.doneFile(local.getName(), fileSize);
 					it.remove();
 					break;
 					}
@@ -204,14 +204,14 @@ public class SyncClient
 			{
 			if(listener!=null)
 				listener.startFile(local.getName());
-			CommitProcessor.send(this, local);
+			long fileSize=CommitProcessor.send(this, local);
 			if(listener!=null)
-				listener.doneFile(local.getName(), 0);
+				listener.doneFile(local.getName(), fileSize);
 			}
 
 		for(Map.Entry<String,IndexedHash> e:map.entrySet())
 			sync.delete(uuid, e.getKey());
-		
+
 		if(listener!=null)
 			listener.doneUpdate(project);
 		}
@@ -261,8 +261,9 @@ public class SyncClient
 		String host=null;
 		int port=54323;
 		String path="./";
-		String login=null;
-		String pass=null;
+		String login="anonymous";
+		String pass="";
+		Pattern filter=null;
 		Args args=new Args(arg);
 		String a;
 		while ((a=args.next())!=null)
@@ -277,6 +278,8 @@ public class SyncClient
 				pass=args.nextValue();
 			else if(a.equals("path")||a.equals("d"))
 				path=args.nextValue();
+			else if(a.equals("filter")||a.equals("f"))
+				filter=Pattern.compile(args.nextValue());
 			else if(a.equals("help"))
 				{
 				log.info("usage: <option> <cmd> <project>");
@@ -284,11 +287,15 @@ public class SyncClient
 				log.info("	-H <host> |--host=<host>");
 				log.info("		Set the server host to use (required).");
 				log.info("	-P <port> | --port=<port>");
-				log.info("		Set the port to use, use the default port if not specified");
+				log.info("		Set the port to use (default to 54323)");
 				log.info("	-l <login> | --login=<login>");
-				log.info("		Set login.");
+				log.info("		Set login (default to 'anonymous')");
 				log.info("	-p <pass> | --pass=<pass>");
+				log.info("		set the password to use (default to empty)");
+				log.info("	-f <regexp> | --filter=<regexp>");
+				log.info("		process only file that match the regexp");
 				log.info("	-d <path> | --path=<path>");
+				log.info("		the path to the local data (default to current directory)");
 				log.info("	--help");
 				log.info("		This help.");
 				log.info("Command");
@@ -309,9 +316,9 @@ public class SyncClient
 		try
 			{
 			if(str.equalsIgnoreCase("update"))
-				cl.update(login, pass, args.left(), false, null);
+				cl.update(login, pass, args.left(), false, filter);
 			else if(str.equalsIgnoreCase("commit"))
-				cl.commit(login, pass, args.left(), null);
+				cl.commit(login, pass, args.left(), filter);
 			else
 				log.error("invalid command");
 			}

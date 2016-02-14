@@ -10,7 +10,10 @@ import unknow.sync.proto.*;
 
 public class CommitProcessor
 	{
-	public static void commit(SyncClient client, FileDesc local, FileDesc server)
+	/**
+	 * @retrun fileSize
+	 */
+	public static long commit(SyncClient client, FileDesc local, FileDesc server)
 		{
 		Map<Integer,List<IndexedHash>> hash=new HashMap<>();
 		for(int i=0; i<server.getBlocs().size(); i++)
@@ -27,6 +30,7 @@ public class CommitProcessor
 
 		Map<Long,Integer> blocFound=new HashMap<Long,Integer>();
 		File file=new File(client.path.toFile(), local.getName());
+		long fileSize=file.length();
 		try
 			{
 			boolean done=false;
@@ -44,7 +48,7 @@ public class CommitProcessor
 					client.listener.startReconstruct(local.getName());
 				FileDesc n=sendReconstruct(client, blocFound, server, local.getFileHash(), file);
 				if(client.listener!=null)
-					client.listener.doneReconstruct(local.getName(), file.length(), n==null);
+					client.listener.doneReconstruct(local.getName(), fileSize, n==null);
 				if(n==null)
 					done=true;
 				else
@@ -60,6 +64,7 @@ public class CommitProcessor
 			{
 			e.printStackTrace();
 			}
+		return fileSize;
 		}
 
 	private static void findBloc(int blocSize, Map<Integer,List<IndexedHash>> hash, Map<Long,Integer> blocFound, FileDesc local, FileDesc server, File file) throws IOException, NoSuchAlgorithmException
@@ -212,13 +217,16 @@ public class CommitProcessor
 		return client.endAppend(expectedHash);
 		}
 
-	public static void send(SyncClient client, FileDesc local) throws IOException
+	/**
+	 * @return fileSize
+	 */
+	public static long send(SyncClient client, FileDesc local) throws IOException
 		{
+		long fileSize=0;
 		FileDesc server=null;
 		if(client.listener!=null)
 			client.listener.startReconstruct(local.getName());
 		client.startAppend(local.getName());
-		long fileSize=0;
 		try (FileInputStream fis=new FileInputStream(client.path.resolve(local.getName()).toFile()))
 			{
 			byte[] buf=new byte[128*1024];
@@ -235,6 +243,7 @@ public class CommitProcessor
 		if(client.listener!=null)
 			client.listener.doneReconstruct(local.getName(), fileSize, server==null);
 		if(server!=null)
-			commit(client, local, server);
+			return commit(client, local, server);
+		return fileSize;
 		}
 	}
