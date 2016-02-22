@@ -12,7 +12,7 @@ import java.nio.file.*;
 import java.security.*;
 import java.util.*;
 
-import org.apache.logging.log4j.*;
+import org.slf4j.*;
 
 import unknow.common.*;
 import unknow.common.kryo.*;
@@ -29,7 +29,7 @@ import unknow.sync.proto.pojo.UUID;
 @Sharable
 public class SyncServ extends ChannelHandlerAdapter
 	{
-	private static final Logger log=LogManager.getFormatterLogger(SyncServ.class);
+	private static final Logger log=LoggerFactory.getLogger(SyncServ.class);
 	private static final Done DONE=new Done();
 	private Cfg cfg;
 

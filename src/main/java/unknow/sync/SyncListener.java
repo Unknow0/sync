@@ -1,6 +1,6 @@
 package unknow.sync;
 
-import org.apache.logging.log4j.*;
+import org.slf4j.*;
 
 public interface SyncListener
 	{
@@ -24,7 +24,7 @@ public interface SyncListener
 
 	public static class Log implements SyncListener
 		{
-		private static final Logger log=LogManager.getFormatterLogger(Log.class);
+		private static final Logger log=LoggerFactory.getLogger(Log.class);
 
 		public long start;
 		public long file;
@@ -34,30 +34,30 @@ public interface SyncListener
 
 		public void startUpdate(String project, int updated, int news, int delete)
 			{
-			log.info("Start updating '%s', (%d to update, %d to add, %d to remove", project, updated, news, delete);
+			log.info("Start updating '{}', ({} to update, {} to add, {} to remove", project, updated, news, delete);
 			start=System.currentTimeMillis();
 			}
 
 		public void startFile(String name)
 			{
-			log.info("Starting '%s'", name);
+			log.info("Starting '{}'", name);
 			file=System.currentTimeMillis();
 			}
 
 		public void startCheckFile(String name)
 			{
-			log.info("Starting diff for '%s'", name);
+			log.info("Starting diff for '{}'", name);
 			local=System.currentTimeMillis();
 			}
 
 		public void doneCheckFile(String name)
 			{
-			log.info("Finished diff for '%s' in %.3f sec", name, (System.currentTimeMillis()-local)/1000.);
+			log.info("Finished diff for '{}' in {} sec", name, String.format("%.3f", (System.currentTimeMillis()-local)/1000.));
 			}
 
 		public void startReconstruct(String name)
 			{
-			log.info("Start reconstructing '%s'", name);
+			log.info("Start reconstructing '{}'", name);
 			local=System.currentTimeMillis();
 			}
 
@@ -70,22 +70,22 @@ public interface SyncListener
 		public void doneReconstruct(String name, long fileSize, boolean ok)
 			{
 			double sec=(System.currentTimeMillis()-local)/1000.;
-			log.info("Finished reconstructing '%s' in %.3f sec (%.3f Ko/sec)", name, sec, fileSize/1024./sec);
+			log.info("Finished reconstructing '{}' in {} sec ({} Ko/sec)", name, String.format("%.3f", sec), String.format("%.3f", fileSize/1024./sec));
 			if(!ok)
-				log.warn("File '%s' hash missmatched retry.", name);
+				log.warn("File '{}' hash missmatched retry.", name);
 			}
 
 		public void doneFile(String name, long fileSize)
 			{
 			double sec=(System.currentTimeMillis()-file)/1000.;
 			totalSize+=fileSize;
-			log.info("Finished update for '%s' in %.3f sec (%.3f Ko/sec)", name, sec, fileSize/1024./sec);
+			log.info("Finished update for '{}' in {} sec ({} Ko/sec)", name, String.format("%.3f", sec), String.format("%.3f", fileSize/1024./sec));
 			}
 
 		public void doneUpdate(String project)
 			{
 			double sec=(System.currentTimeMillis()-start)/1000.;
-			log.info("Done updating '%s' in %.3f (%.3f Ko/sec)", project, sec, totalSize/1024./sec);
+			log.info("Done updating '{}' in {} ({} Ko/sec)", project, String.format("%.3f", sec), String.format("%.3f", totalSize/1024./sec));
 			}
 		}
 	}

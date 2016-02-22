@@ -7,7 +7,7 @@ import java.security.*;
 import java.util.*;
 import java.util.regex.*;
 
-import org.apache.logging.log4j.*;
+import org.slf4j.*;
 
 import unknow.common.cli.*;
 import unknow.common.tools.*;
@@ -24,7 +24,7 @@ import com.esotericsoftware.kryo.io.*;
  */
 public class SyncClient implements AutoCloseable
 	{
-	private static final Logger log=LogManager.getFormatterLogger(SyncClient.class);
+	private static final Logger log=LoggerFactory.getLogger(SyncClient.class);
 	protected Path path;
 
 	protected int blocSize;

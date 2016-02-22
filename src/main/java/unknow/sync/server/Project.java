@@ -5,7 +5,7 @@ import java.nio.file.*;
 import java.security.*;
 import java.util.*;
 
-import org.apache.logging.log4j.*;
+import org.slf4j.*;
 
 import unknow.json.*;
 import unknow.sync.*;
@@ -13,7 +13,7 @@ import unknow.sync.proto.pojo.*;
 
 public class Project
 	{
-	private static final Logger log=LogManager.getFormatterLogger(Project.class);
+	private static final Logger log=LoggerFactory.getLogger(Project.class);
 	private List<FileDesc> files;
 	private JsonObject cfg;
 	private String name;
@@ -29,7 +29,7 @@ public class Project
 
 		if(!Files.exists(root))
 			{
-			log.warn("root directory of '%s' not found creating '%s'", name, root);
+			log.warn("root directory of '{}' not found creating '{}'", name, root);
 			Files.createDirectories(root);
 			}
 		if(Files.isDirectory(root))
@@ -59,7 +59,7 @@ public class Project
 			}
 		catch (Exception e)
 			{
-			log.error("failed to check right on '%' for '%s'", name, login);
+			log.error("failed to check right on '{}' for '{}'", name, login);
 			}
 		return false;
 		}

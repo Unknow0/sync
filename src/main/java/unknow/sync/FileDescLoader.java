@@ -8,14 +8,14 @@ import java.util.*;
 import java.util.concurrent.*;
 import java.util.regex.*;
 
-import org.apache.logging.log4j.*;
+import org.slf4j.*;
 
 import unknow.common.data.*;
 import unknow.sync.proto.pojo.*;
 
 public class FileDescLoader
 	{
-	private static final Logger log=LogManager.getFormatterLogger(FileDescLoader.class);
+	private static final Logger log=LoggerFactory.getLogger(FileDescLoader.class);
 	private static final ExecutorService exec=Executors.newCachedThreadPool();
 
 	public static void load(Collection<FileDesc> files, Path root, int blocSize, Pattern pattern) throws IOException
@@ -31,7 +31,7 @@ public class FileDescLoader
 				}
 			catch (Exception e)
 				{
-				log.error(e);
+				log.error("", e);
 				}
 			}
 		}
