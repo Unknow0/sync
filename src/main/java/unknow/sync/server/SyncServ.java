@@ -1,37 +1,44 @@
 package unknow.sync.server;
 
+import io.netty.bootstrap.*;
+import io.netty.channel.*;
+import io.netty.channel.ChannelHandler.Sharable;
+import io.netty.channel.nio.*;
+import io.netty.channel.socket.*;
+import io.netty.channel.socket.nio.*;
+
 import java.io.*;
-import java.net.*;
-import java.nio.*;
 import java.nio.file.*;
 import java.security.*;
 import java.util.*;
 
-import org.apache.avro.*;
-import org.apache.avro.ipc.*;
-import org.apache.avro.ipc.specific.*;
 import org.apache.logging.log4j.*;
 
 import unknow.common.*;
+import unknow.common.kryo.*;
 import unknow.json.*;
+import unknow.sync.*;
 import unknow.sync.proto.*;
-import unknow.sync.proto.UUID;
+import unknow.sync.proto.pojo.*;
+import unknow.sync.proto.pojo.UUID;
 
 /**
  * 
  * @author Unknow
  */
-public class SyncServ
+@Sharable
+public class SyncServ extends ChannelHandlerAdapter
 	{
 	private static final Logger log=LogManager.getFormatterLogger(SyncServ.class);
+	private static final Done DONE=new Done();
 	private Cfg cfg;
-
-	private NettyServer server;
 
 	private Map<String,Project> projects;
 	private JsonObject users;
 
 	private Map<UUID,State> states;
+
+	private Kryos kryos;
 
 	private static class State
 		{
@@ -52,8 +59,8 @@ public class SyncServ
 		users=cfg.getJsonObject("server.sync.users");
 		log.info("load");
 		loadProjects();
-		server=new NettyServer(new SpecificResponder(Sync.class, new SyncImpl()), new InetSocketAddress(cfg.getInt("server.sync.port")));
-		server.start();
+
+		kryos=new Kryos();
 		log.info("ready");
 		}
 
@@ -132,294 +139,342 @@ public class SyncServ
 		return new UUID(b);
 		}
 
+	public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception
+		{
+		Object res=null;
+		try
+			{
+			if(msg instanceof LoginReq)
+				{
+				LoginReq l=(LoginReq)msg;
+				res=login(l.login, l.pass, l.project, l.action);
+				}
+			else if(msg instanceof GetFileDescs)
+				{
+				GetFileDescs f=(GetFileDescs)msg;
+				res=getFileDescs(f.uuid, f.fileId);
+				}
+			else if(msg instanceof GetBlocReq)
+				{
+				GetBlocReq r=(GetBlocReq)msg;
+				res=getBloc(r.uuid, r.name, r.off, r.len);
+				}
+			else if(msg instanceof DeleteReq)
+				{
+				DeleteReq d=(DeleteReq)msg;
+				res=delete(d.uuid, d.file);
+				}
+			else if(msg instanceof GetFileReq)
+				{
+				GetFileReq g=(GetFileReq)msg;
+				res=getFile(g.uuid, g.name, g.off);
+				}
+			else if(msg instanceof StartAppend)
+				{
+				StartAppend a=(StartAppend)msg;
+				startAppend(a.uuid, a.name);
+				}
+			else if(msg instanceof AppendData)
+				{
+				AppendData a=(AppendData)msg;
+				appendData(a.uuid, a.data);
+				}
+			else if(msg instanceof AppendBloc)
+				{
+				AppendBloc a=(AppendBloc)msg;
+				appendBloc(a.uuid, a.off, a.len);
+				}
+			else if(msg instanceof EndAppend)
+				{
+				EndAppend a=(EndAppend)msg;
+				res=endAppend(a.uuid, a.hash);
+				}
+			}
+		catch (SyncException e)
+			{
+			log.warn("", e);
+			res=e.getMessage();
+			}
+		if(res!=null)
+			ctx.writeAndFlush(res);
+		}
+
 	private static final String ANONYMOUS="anonymous";
 
-	private void exception(String desc) throws SyncException
+	public LoginRes login(String login, String pass, String project, Action action) throws SyncException
 		{
-		SyncException e=new SyncException();
-		e.setDesc(desc);
-		log.error(desc);
-		throw e;
+		String pass2=users.optString(login);
+		if(!ANONYMOUS.equals(login)&&(pass2==null||!pass2.equals(pass)))
+			throw new SyncException("login failed");
+
+		Project p=projects.get(project);
+		if(p==null)
+			throw new SyncException("unknown project");
+		if(!p.asRight(login, action))
+			throw new SyncException("no right");
+
+		State s=nextState();
+		s.action=action;
+		s.project=p;
+		return new LoginRes(s.uuid, p.projectInfo());
 		}
 
-	private void exception(Exception cause) throws SyncException
+	public FileDesc[] getFileDescs(UUID uuid, int[] fileId) throws SyncException
 		{
-		SyncException e=new SyncException();
-		e.setDesc("Unexpected Error");
-		log.error("Unexpected Error", cause);
-		throw e;
+		State s=states.get(uuid);
+		if(s==null)
+			throw new SyncException("invalide state");
+
+		FileDesc[] descs=new FileDesc[fileId.length];
+
+		for(int i=0; i<fileId.length; i++)
+			descs[i]=s.project.fileDesc(fileId[i]);
+
+		return descs;
 		}
 
-	private class SyncImpl implements Sync
+	public byte[] getBloc(UUID uuid, String file, int bloc, int count) throws SyncException
 		{
-		@Override
-		public LoginRes login(String login, String pass, String project, Action action) throws SyncException
+		State s=states.get(uuid);
+		if(s==null||s.action!=Action.read)
+			throw new SyncException("invalide state");
+
+		RandomAccessFile ram=null;
+		try
 			{
-			String pass2=users.optString(login);
-			if(!ANONYMOUS.equals(login)&&(pass2==null||!pass2.equals(pass)))
-				exception("login failed");
-
-			Project p=projects.get(project);
-			if(p==null)
-				exception("unknown project");
-			if(!p.asRight(login, action))
-				exception("no right");
-
-			State s=nextState();
-			s.action=action;
-			s.project=p;
-			return new LoginRes(s.uuid, p.projectInfo());
-			}
-
-		@Override
-		public List<FileDesc> getFileDescs(UUID uuid, List<Integer> fileId) throws SyncException
-			{
-			State s=states.get(uuid);
-			if(s==null)
-				exception("invalide state");
-
-			List<FileDesc> descs=new ArrayList<FileDesc>(fileId.size());
-
-			for(Integer i:fileId)
-				descs.add(s.project.fileDesc(i));
-
-			return descs;
-			}
-
-		public ByteBuffer getBloc(UUID uuid, String file, int bloc, int count) throws SyncException
-			{
-			State s=states.get(uuid);
-			if(s==null||s.action!=Action.read)
-				exception("invalide state");
-
-			RandomAccessFile ram=null;
-			try
+			int blocSize=s.project.blocSize();
+			File f=new File(s.project.path(), file.toString());
+			if(f.isFile())
 				{
-				int blocSize=s.project.blocSize();
-				File f=new File(s.project.path(), file.toString());
-				if(f.isFile())
+				ram=new RandomAccessFile(f, "r");
+				ram.seek(bloc*blocSize);
+				int toRead=blocSize*count;
+				byte[] buf=new byte[toRead];
+				int l;
+				int c=0;
+				while (c<toRead&&(l=ram.read(buf, c, toRead-c))>=0)
+					c+=l;
+
+				return c==buf.length?buf:Arrays.copyOf(buf, c);
+				}
+			throw new SyncException("invalid file '"+file+"'");
+			}
+		catch (Exception e)
+			{
+			throw new SyncException(e);
+			}
+		finally
+			{
+			if(ram!=null)
+				try
 					{
-					ram=new RandomAccessFile(f, "r");
-					ram.seek(bloc*blocSize);
-					int toRead=blocSize*count;
-					byte[] buf=new byte[toRead];
-					int l;
-					int c=0;
-					while (c<toRead&&(l=ram.read(buf, c, toRead-c))>=0)
-						c+=l;
-
-					return ByteBuffer.wrap(buf, 0, c);
+					ram.close();
 					}
-				exception("invalid file '"+file+"'");
-				}
-			catch (Exception e)
-				{
-				exception(e);
-				}
-			finally
-				{
-				if(ram!=null)
-					try
-						{
-						ram.close();
-						}
-					catch (IOException e)
-						{
-						}
-				}
-			return null; // How can i get here???
-			}
-
-		public ByteBuffer getFile(UUID uuid, String file, long offset) throws AvroRemoteException
-			{
-			State s=states.get(uuid);
-			if(s==null||s.action!=Action.read)
-				exception("invalide state");
-			try
-				{
-				File f=new File(s.project.path(), file);
-				if(f.isFile())
+				catch (IOException e)
 					{
-					System.out.println("sending file "+file);
-					try (RandomAccessFile ram=new RandomAccessFile(f, "r"))
-						{
-						byte[] buf=new byte[131072]; // send bloc of 128K
-						ram.seek(offset);
-						int l=ram.read(buf);
-						if(l<0)
-							return null;
-						return ByteBuffer.wrap(buf, 0, l);
-						}
 					}
-				exception("invalid file");
-				}
-			catch (Exception e)
-				{
-				exception(e);
-				}
-			return null; // How can i get here???
 			}
+		}
 
-		public Void startAppend(UUID uuid, String file) throws AvroRemoteException
+	public Object getFile(UUID uuid, String file, long offset) throws SyncException
+		{
+		State s=states.get(uuid);
+		if(s==null||s.action!=Action.read)
+			throw new SyncException("invalide state");
+		try
 			{
-			State s=states.get(uuid);
-			if(s==null||s.action!=Action.write)
-				exception("invalide state");
-			try
+			File f=new File(s.project.path(), file);
+			if(f.isFile())
 				{
-				File f=new File(s.project.path(), file.toString());
-
-				s.appendFile=file;
-				if(f.exists())
-					s.orgFile=new RandomAccessFile(f, "r");
-				else
-					f.getParentFile().mkdirs();
-				s.tmp=File.createTempFile("sync_", ".tmp");
-				s.fos=new FileOutputStream(s.tmp);
-				return null;
-				}
-			catch (Exception e)
-				{
-				s.appendFile=null;
-				if(s.orgFile!=null)
-					try
-						{
-						s.orgFile.close();
-						}
-					catch (IOException e2)
-						{
-						}
-				s.orgFile=null;
-				if(s.tmp!=null)
-					s.tmp.delete();
-				s.tmp=null;
-				if(s.fos!=null)
-					try
-						{
-						s.fos.close();
-						}
-					catch (IOException e1)
-						{
-						}
-				s.fos=null;
-				log.error("", e);
-				throw new AvroRemoteException(e);
-				}
-			}
-
-		public boolean appendData(UUID uuid, ByteBuffer data) throws AvroRemoteException
-			{
-			State s=states.get(uuid);
-			if(s==null||s.fos==null||s.action!=Action.write)
-				exception("invalide state");
-			try
-				{
-				s.fos.write(data.array());
-				return true;
-				}
-			catch (Exception e)
-				{
-				log.error("", e);
-				throw new AvroRemoteException(e);
-				}
-			}
-
-		public boolean appendBloc(UUID uuid, int bloc, Integer count) throws AvroRemoteException
-			{
-			State s=states.get(uuid);
-
-			if(s==null||s.fos==null||s.action!=Action.write)
-				exception("invalide state");
-			try
-				{
-				int blocSize=s.project.blocSize();
-				s.orgFile.seek(bloc*blocSize);
-				int l=blocSize*(count==null?1:count);
-				byte[] buf=new byte[blocSize];
-				while (l>0)
+				try (RandomAccessFile ram=new RandomAccessFile(f, "r"))
 					{
-					int read=s.orgFile.read(buf);
-					if(read==-1)
-						break;
-					s.fos.write(buf, 0, read);
-					l-=read;
+					byte[] buf=new byte[131072]; // send bloc of 128K
+					ram.seek(offset);
+					int l=ram.read(buf);
+					if(l<0)
+						return DONE;
+					return l==buf.length?buf:Arrays.copyOf(buf, l);
 					}
-				return true;
 				}
-			catch (Exception e)
-				{
-				log.error("", e);
-				throw new AvroRemoteException(e);
-				}
+			throw new SyncException("invalid file");
 			}
-
-		public FileDesc endAppend(UUID uuid, Hash hash) throws AvroRemoteException
+		catch (Exception e)
 			{
-			State s=states.get(uuid);
+			throw new SyncException(e);
+			}
+		}
 
-			if(s==null||s.fos==null||s.action!=Action.write)
-				exception("invalide state");
-			try
-				{
-				if(s.orgFile!=null)
+	public void startAppend(UUID uuid, String file) throws SyncException
+		{
+		State s=states.get(uuid);
+		if(s==null||s.action!=Action.write)
+			throw new SyncException("invalide state");
+		try
+			{
+			File f=new File(s.project.path(), file.toString());
+
+			s.appendFile=file;
+			if(f.exists())
+				s.orgFile=new RandomAccessFile(f, "r");
+			else
+				f.getParentFile().mkdirs();
+			s.tmp=File.createTempFile("sync_", ".tmp");
+			s.fos=new FileOutputStream(s.tmp);
+			}
+		catch (Exception e)
+			{
+			s.appendFile=null;
+			if(s.orgFile!=null)
+				try
 					{
-					try
-						{
-						s.orgFile.close();
-						}
-					catch (IOException e)
-						{
-						log.warn("failed to close origin file", e);
-						}
+					s.orgFile.close();
 					}
+				catch (IOException e2)
+					{
+					}
+			s.orgFile=null;
+			if(s.tmp!=null)
+				s.tmp.delete();
+			s.tmp=null;
+			if(s.fos!=null)
 				try
 					{
 					s.fos.close();
 					}
-				catch (IOException e)
+				catch (IOException e1)
 					{
-					log.warn("failed to close tmpfile file", e);
 					}
-				String file=s.appendFile;
-				Files.move(s.tmp.toPath(), Paths.get(s.project.path(), file), StandardCopyOption.REPLACE_EXISTING);
-				FileDesc fd=s.project.reloadFile(file);
-				s.appendFile=null;
-				s.orgFile=null;
-				s.tmp=null;
-				s.fos=null;
-				return fd.getFileHash().equals(hash)?null:fd;
-				}
-			catch (Exception e)
-				{
-				log.error("", e);
-				throw new AvroRemoteException(e);
-				}
-			}
-
-		public boolean delete(UUID uuid, String file) throws AvroRemoteException
-			{
-			State s=states.get(uuid);
-
-			if(s==null||s.action!=Action.write)
-				exception("invalide state");
-			try
-				{
-				return s.project.delete(file);
-				}
-			catch (Exception e)
-				{
-				log.error("", e);
-				throw new AvroRemoteException(e);
-				}
+			s.fos=null;
+			throw new SyncException(e);
 			}
 		}
 
-	public static void main(String arg[]) throws JsonException, NoSuchAlgorithmException, IOException
+	public void appendData(UUID uuid, byte[] data) throws SyncException
+		{
+		State s=states.get(uuid);
+		if(s==null||s.fos==null||s.action!=Action.write)
+			throw new SyncException("invalide state");
+		try
+			{
+			s.fos.write(data);
+			return;
+			}
+		catch (Exception e)
+			{
+			throw new SyncException(e);
+			}
+		}
+
+	public void appendBloc(UUID uuid, int bloc, Integer count) throws SyncException
+		{
+		State s=states.get(uuid);
+
+		if(s==null||s.fos==null||s.action!=Action.write)
+			throw new SyncException("invalide state");
+		try
+			{
+			int blocSize=s.project.blocSize();
+			s.orgFile.seek(bloc*blocSize);
+			int l=blocSize*(count==null?1:count);
+			byte[] buf=new byte[blocSize];
+			while (l>0)
+				{
+				int read=s.orgFile.read(buf);
+				if(read==-1)
+					break;
+				s.fos.write(buf, 0, read);
+				l-=read;
+				}
+			return;
+			}
+		catch (Exception e)
+			{
+			throw new SyncException(e);
+			}
+		}
+
+	public Object endAppend(UUID uuid, Hash hash) throws SyncException
+		{
+		State s=states.get(uuid);
+
+		if(s==null||s.fos==null||s.action!=Action.write)
+			throw new SyncException("invalide state");
+		try
+			{
+			if(s.orgFile!=null)
+				{
+				try
+					{
+					s.orgFile.close();
+					}
+				catch (IOException e)
+					{
+					log.warn("failed to close origin file", e);
+					}
+				}
+			try
+				{
+				s.fos.close();
+				}
+			catch (IOException e)
+				{
+				log.warn("failed to close tmpfile file", e);
+				}
+			String file=s.appendFile;
+			Files.move(s.tmp.toPath(), Paths.get(s.project.path(), file), StandardCopyOption.REPLACE_EXISTING);
+			FileDesc fd=s.project.reloadFile(file);
+			s.appendFile=null;
+			s.orgFile=null;
+			s.tmp=null;
+			s.fos=null;
+			return fd.fileHash.equals(hash)?DONE:fd;
+			}
+		catch (Exception e)
+			{
+			throw new SyncException(e);
+			}
+		}
+
+	public boolean delete(UUID uuid, String file) throws SyncException
+		{
+		State s=states.get(uuid);
+
+		if(s==null||s.action!=Action.write)
+			throw new SyncException("invalide state");
+		return s.project.delete(file);
+		}
+
+	public static void main(String arg[]) throws JsonException, NoSuchAlgorithmException, IOException, InterruptedException
 		{
 		Cfg cfg=Cfg.getSystem();
 		if(arg.length!=0)
 			cfg=new Cfg(arg[0]);
 		System.out.println(cfg);
-		new SyncServ(cfg);
+		final SyncServ serv=new SyncServ(cfg);
+
+		EventLoopGroup bossGroup=new NioEventLoopGroup();
+		EventLoopGroup workerGroup=new NioEventLoopGroup();
+		try
+			{
+			ServerBootstrap b=new ServerBootstrap();
+			b.group(bossGroup, workerGroup).channel(NioServerSocketChannel.class).childHandler(new ChannelInitializer<SocketChannel>()
+				{ // (4)
+					@Override
+					public void initChannel(SocketChannel ch) throws Exception
+						{
+						ch.pipeline().addLast(new KryoDecoder(serv.kryos), new KryoEncoder(serv.kryos), serv);
+						}
+				}).option(ChannelOption.SO_BACKLOG, 128).childOption(ChannelOption.SO_KEEPALIVE, true);
+
+			// Bind and start to accept incoming connections.
+			ChannelFuture f=b.bind(cfg.getInt("server.sync.port")).sync(); // TODO
+
+			f.channel().closeFuture().sync();
+			}
+		finally
+			{
+			workerGroup.shutdownGracefully();
+			bossGroup.shutdownGracefully();
+			}
 		}
 	}

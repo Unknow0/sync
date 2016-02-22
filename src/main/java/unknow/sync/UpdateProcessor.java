@@ -1,60 +1,60 @@
 package unknow.sync;
 
 import java.io.*;
-import java.nio.*;
 import java.nio.file.*;
 import java.security.*;
 import java.util.*;
 
+import unknow.common.data.*;
 import unknow.sync.FileDescLoader.IndexedHash;
-import unknow.sync.proto.*;
+import unknow.sync.proto.pojo.*;
 
 public class UpdateProcessor
 	{
-	public static void update(SyncClient client, FileDesc local, FileDesc server) throws NoSuchAlgorithmException, IOException
+	public static void update(SyncClient client, FileDesc local, FileDesc server) throws NoSuchAlgorithmException, IOException, SyncException
 		{
 		if(client.listener!=null)
-			client.listener.startFile(local.getName());
+			client.listener.startFile(local.name);
 		Map<Integer,Long> blocFound=new HashMap<Integer,Long>();
 
 		Map<Integer,List<IndexedHash>> hash=new HashMap<>();
-		for(int i=0; i<server.getBlocs().size(); i++)
+		for(int i=0; i<server.blocs.length; i++)
 			{
-			Bloc b=server.getBlocs().get(i);
-			List<IndexedHash> list=hash.get(b.getRoll());
+			Bloc b=server.blocs[i];
+			List<IndexedHash> list=hash.get(b.roll);
 			if(list==null)
 				{
 				list=new ArrayList<IndexedHash>(1);
-				hash.put(b.getRoll(), list);
+				hash.put(b.roll, list);
 				}
-			list.add(new IndexedHash(i, b.getHash()));
+			list.add(new IndexedHash(i, b.hash));
 			}
-		File file=new File(client.path.toFile(), local.getName());
+		File file=new File(client.path.toFile(), local.name);
 		boolean done;
 		do
 			{
 			blocFound.clear();
 			if(client.listener!=null)
-				client.listener.startCheckFile(local.getName());
+				client.listener.startCheckFile(local.name);
 			findBloc(client.blocSize, hash, blocFound, local, server, file);
 			if(client.listener!=null)
-				client.listener.doneCheckFile(local.getName());
+				client.listener.doneCheckFile(local.name);
 
 			if(client.listener!=null)
-				client.listener.startReconstruct(local.getName());
-			if(blocFound.size()>server.getBlocs().size()*.4)
+				client.listener.startReconstruct(local.name);
+			if(blocFound.size()>server.blocs.length*.4)
 				done=reconstruct(client, blocFound, server, file);
 			else
-				done=client.getFile(file, server.getName(), server.getFileHash());
+				done=client.getFile(file, server.name, server.fileHash);
 			if(client.listener!=null)
-				client.listener.doneReconstruct(local.getName(), file.length(), done);
+				client.listener.doneReconstruct(local.name, file.length(), done);
 			if(!done)
-				local=FileDescLoader.loadFile(client.path, Paths.get(local.getName()), client.blocSize);
+				local=FileDescLoader.loadFile(client.path, Paths.get(local.name), client.blocSize);
 			}
 		while (!done);
 
 		if(client.listener!=null)
-			client.listener.doneFile(local.getName(), file.length());
+			client.listener.doneFile(local.name, file.length());
 		}
 
 	private static void findBloc(int blocSize, Map<Integer,List<IndexedHash>> hash, Map<Integer,Long> blocFound, FileDesc local, FileDesc server, File file) throws IOException, NoSuchAlgorithmException
@@ -62,7 +62,7 @@ public class UpdateProcessor
 		Map<Integer,Integer> diff=FileDescLoader.diff(local, server);
 		for(Map.Entry<Integer,Integer> e:diff.entrySet())
 			blocFound.put(e.getKey(), (long)e.getValue()*blocSize);
-		if(blocFound.size()>server.getBlocs().size()*.6)
+		if(blocFound.size()>server.blocs.length*.6)
 			return;
 
 //			List<Integer> b=new ArrayList<Integer>(diff.values());
@@ -90,7 +90,7 @@ public class UpdateProcessor
 					for(IndexedHash p:list)
 						{
 						md.reset();
-						if(Arrays.equals(md.digest(rcs.buf()), p.h.bytes()))
+						if(Arrays.equals(md.digest(rcs.buf()), p.h.bytes))
 							{
 							blocFound.put(p.i, off);
 							break;
@@ -100,16 +100,16 @@ public class UpdateProcessor
 				off++;
 				}
 			// test with padding
-			Bloc last=server.getBlocs().get(server.getBlocs().size()-1);
+			Bloc last=server.blocs[server.blocs.length-1];
 			byte p=0;
 			for(int i=0; i<blocSize-1; i++)
 				{
 				int r=rcs.append(++p);
-				if(r==last.getRoll())
+				if(r==last.roll)
 					{ // found match
 					md.reset();
-					if(Arrays.equals(md.digest(rcs.buf()), last.getHash().bytes()))
-						blocFound.put(server.getBlocs().size()-1, off);
+					if(Arrays.equals(md.digest(rcs.buf()), last.hash.bytes))
+						blocFound.put(server.blocs.length-1, off);
 					}
 				off++;
 				}
@@ -121,7 +121,7 @@ public class UpdateProcessor
 			}
 		}
 
-	private static boolean reconstruct(SyncClient client, Map<Integer,Long> blocFound, FileDesc server, File file) throws IOException, NoSuchAlgorithmException
+	private static boolean reconstruct(SyncClient client, Map<Integer,Long> blocFound, FileDesc server, File file) throws IOException, NoSuchAlgorithmException, SyncException
 		{
 		Integer[] blocs=blocFound.keySet().toArray(new Integer[0]);
 		Arrays.sort(blocs);
@@ -135,15 +135,13 @@ public class UpdateProcessor
 			int i=0; // index of current bloc
 			byte[] buf=new byte[client.blocSize];
 
-			int bc=server.getBlocs().size();
+			int bc=server.blocs.length;
 			while (i<bc&&bi<blocs.length)
 				{
 				int len=blocs[bi]-i;
 				if(len>0) // blocs need to be retreiving from server
 					{
-					ByteBuffer bb=client.getBloc(server.getName(), i, len);
-					byte[] array=new byte[bb.remaining()]; // todo reuse array
-					bb.get(array);
+					byte[] array=client.getBloc(server.name, i, len);
 					fos.write(array);
 					md.update(array);
 					i+=len;
@@ -168,9 +166,7 @@ public class UpdateProcessor
 				}
 			if(i<bc) // file on server has bloc remaining
 				{
-				ByteBuffer bb=client.getBloc(server.getName(), i, bc-i);
-				byte[] array=new byte[bb.remaining()]; // todo reuse array
-				bb.get(array);
+				byte[] array=client.getBloc(server.name, i, bc-i);
 				fos.write(array);
 				md.update(array);
 				}
@@ -180,6 +176,6 @@ public class UpdateProcessor
 
 		Files.move(Paths.get(tmp.getPath()), Paths.get(file.getPath()), StandardCopyOption.REPLACE_EXISTING);
 
-		return Arrays.equals(server.getFileHash().bytes(), digest);
+		return Arrays.equals(server.fileHash.bytes, digest);
 		}
 	}

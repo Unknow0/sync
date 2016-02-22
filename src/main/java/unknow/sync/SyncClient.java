@@ -2,21 +2,21 @@ package unknow.sync;
 
 import java.io.*;
 import java.net.*;
-import java.nio.*;
 import java.nio.file.*;
 import java.security.*;
 import java.util.*;
 import java.util.regex.*;
 
-import org.apache.avro.*;
-import org.apache.avro.ipc.*;
-import org.apache.avro.ipc.specific.*;
 import org.apache.logging.log4j.*;
 
 import unknow.common.cli.*;
+import unknow.common.tools.*;
 import unknow.sync.FileDescLoader.IndexedHash;
 import unknow.sync.proto.*;
-import unknow.sync.proto.UUID;
+import unknow.sync.proto.pojo.*;
+import unknow.sync.proto.pojo.UUID;
+
+import com.esotericsoftware.kryo.io.*;
 
 /**
  * 
@@ -29,59 +29,74 @@ public class SyncClient implements AutoCloseable
 
 	protected int blocSize;
 
-	private Sync sync;
-	private NettyTransceiver client;
+	private Kryos kryo;
+	private Input in;
+	private Output out;
+	private Socket socket;
 
 	protected SyncListener listener;
 	protected UUID uuid;
 
-	public SyncClient(String host, int port, String p) throws UnknownHostException, IOException
+	public SyncClient(String host, int port, String p) throws UnknownHostException, IOException, NoSuchAlgorithmException
 		{
 		path=Paths.get(p);
-		client=new NettyTransceiver(new InetSocketAddress(host, port));
-		sync=SpecificRequestor.getClient(Sync.class, client);
+		socket=new Socket(host, port);
+		in=new Input(socket.getInputStream());
+		out=new Output(socket.getOutputStream());
+		kryo=new Kryos();
+		}
+
+	@SuppressWarnings("unchecked")
+	private <T> T send(Object o) throws SyncException
+		{
+		kryo.write(out, o);
+		Object r=kryo.read(in);
+		if(r instanceof String)
+			throw new SyncException((String)r);
+		return (T)r;
 		}
 
 	public void update(String login, String pass, String project, boolean delete, Pattern pattern) throws IOException, InterruptedException, NoSuchAlgorithmException, SyncException
 		{
-		LoginRes res=sync.login(login, pass, project, Action.read);
-		uuid=res.getUuid();
-		ProjectInfo info=res.getProject();
+		LoginRes res=send(new LoginReq(login, pass, project, Action.read));
+		uuid=res.uuid;
+		ProjectInfo info=res.project;
 
-		blocSize=info.getBlocSize();
+		blocSize=info.blocSize;
 
 		Set<FileDesc> files=new HashSet<FileDesc>();
 		FileDescLoader.load(files, path, blocSize, pattern);
 
 		Matcher m=pattern==null?null:pattern.matcher("");
 
-		Map<String,IndexedHash> map=new HashMap<String,IndexedHash>((int)Math.ceil(info.getHashs().size()/.75));
-		for(int i=0; i<info.getHashs().size(); i++)
+		Map<String,IndexedHash> map=new HashMap<String,IndexedHash>((int)Math.ceil(info.hashs.length/.75));
+		for(int i=0; i<info.hashs.length; i++)
 			{
-			FileHash h=info.getHashs().get(i);
+			FileHash h=info.hashs[i];
 			if(m!=null)
-				m.reset(h.getName());
+				m.reset(h.name);
 			if(m==null||m.matches())
-				map.put(h.getName(), new IndexedHash(i, h.getHash()));
+				map.put(h.name, new IndexedHash(i, h.hash));
 			}
 
 		// remove unmodified files
 		Iterator<FileDesc> it=files.iterator();
-		List<Integer> list=new ArrayList<Integer>(files.size());
+		int[] list=new int[files.size()];
 		List<String> filetoDelete=new ArrayList<String>();
+		int k=0;
 		while (it.hasNext())
 			{
 			FileDesc fd=it.next();
-			IndexedHash p=map.remove(fd.getName());
-			if(p!=null&&p.h.equals(fd.getFileHash()))
+			IndexedHash p=map.remove(fd.name);
+			if(p!=null&&p.h.equals(fd.fileHash))
 				it.remove();
 			else if(p==null)
 				{
-				filetoDelete.add(fd.getName());
+				filetoDelete.add(fd.name);
 				it.remove();
 				}
 			else if(p!=null)
-				list.add(p.i);
+				list[k++]=p.i;
 			}
 
 		if(listener!=null)
@@ -94,14 +109,14 @@ public class SyncClient implements AutoCloseable
 			}
 
 		// get modified file desc
-		List<FileDesc> l=sync.getFileDescs(uuid, list);
+		FileDesc[] l=send(new GetFileDescs(uuid, list));
 		for(FileDesc server:l)
 			{
 			it=files.iterator();
 			while (it.hasNext())
 				{
 				FileDesc local=it.next();
-				if(local.getName().equals(server.getName()))
+				if(local.name.equals(server.name))
 					{
 					UpdateProcessor.update(this, local, server);
 
@@ -136,25 +151,25 @@ public class SyncClient implements AutoCloseable
 
 	public void commit(String login, String pass, String project, Pattern pattern) throws NoSuchAlgorithmException, IOException, InterruptedException, SyncException
 		{
-		LoginRes res=sync.login(login, pass, project, Action.write);
-		uuid=res.getUuid();
-		ProjectInfo info=res.getProject();
+		LoginRes res=send(new LoginReq(login, pass, project, Action.write));
+		uuid=res.uuid;
+		ProjectInfo info=res.project;
 
-		blocSize=info.getBlocSize();
+		blocSize=info.blocSize;
 
 		Set<FileDesc> files=new HashSet<FileDesc>();
 		FileDescLoader.load(files, path, blocSize, pattern);
 
 		Matcher m=pattern==null?null:pattern.matcher("");
 
-		Map<String,IndexedHash> map=new HashMap<String,IndexedHash>((int)Math.ceil(info.getHashs().size()/.75));
-		for(int i=0; i<info.getHashs().size(); i++)
+		Map<String,IndexedHash> map=new HashMap<String,IndexedHash>((int)Math.ceil(info.hashs.length/.75));
+		for(int i=0; i<info.hashs.length; i++)
 			{
-			FileHash h=info.getHashs().get(i);
+			FileHash h=info.hashs[i];
 			if(m!=null)
-				m.reset(h.getName());
+				m.reset(h.name);
 			if(m==null||m.matches())
-				map.put(h.getName(), new IndexedHash(i, h.getHash()));
+				map.put(h.name, new IndexedHash(i, h.hash));
 			}
 
 		// remove unmodified files
@@ -164,8 +179,8 @@ public class SyncClient implements AutoCloseable
 		while (it.hasNext())
 			{
 			FileDesc fd=it.next();
-			IndexedHash p=map.remove(fd.getName());
-			if(p!=null&&p.h.equals(fd.getFileHash()))
+			IndexedHash p=map.remove(fd.name);
+			if(p!=null&&p.h.equals(fd.fileHash))
 				it.remove();
 			else if(p==null)
 				{
@@ -180,20 +195,20 @@ public class SyncClient implements AutoCloseable
 			listener.startUpdate(project, files.size(), fileToCreate.size(), map.size());
 
 		// get modified file desc
-		List<FileDesc> l=sync.getFileDescs(uuid, list);
+		FileDesc[] l=send(new GetFileDescs(uuid, CollectionUtils.toIntArray(list)));
 		for(FileDesc server:l)
 			{
 			it=files.iterator();
 			while (it.hasNext())
 				{
 				FileDesc local=it.next();
-				if(local.getName().equals(server.getName()))
+				if(local.name.equals(server.name))
 					{
 					if(listener!=null)
-						listener.startFile(local.getName());
+						listener.startFile(local.name);
 					long fileSize=CommitProcessor.commit(this, local, server);
 					if(listener!=null)
-						listener.doneFile(local.getName(), fileSize);
+						listener.doneFile(local.name, fileSize);
 					it.remove();
 					break;
 					}
@@ -203,53 +218,51 @@ public class SyncClient implements AutoCloseable
 		for(FileDesc local:fileToCreate)
 			{
 			if(listener!=null)
-				listener.startFile(local.getName());
+				listener.startFile(local.name);
 			long fileSize=CommitProcessor.send(this, local);
 			if(listener!=null)
-				listener.doneFile(local.getName(), fileSize);
+				listener.doneFile(local.name, fileSize);
 			}
 
 		for(Map.Entry<String,IndexedHash> e:map.entrySet())
-			sync.delete(uuid, e.getKey());
+			send(new DeleteReq(uuid, e.getKey()));
 
 		if(listener!=null)
 			listener.doneUpdate(project);
 		}
 
-	public void close()
+	public void close() throws IOException
 		{
-		client.close();
+		in.close();
+		out.close();
+		socket.close();
 		}
 
-	public boolean getFile(File file, String name, Hash h) throws IOException, NoSuchAlgorithmException
+	public boolean getFile(File file, String name, Hash h) throws IOException, NoSuchAlgorithmException, SyncException
 		{
 		MessageDigest md=MessageDigest.getInstance("SHA-512");
 		file.getParentFile().mkdirs();
 		try (FileOutputStream fos=new FileOutputStream(file))
 			{
-			byte[] buf=new byte[0];
 			long off=0;
 			while (true)
 				{
-				ByteBuffer bb=sync.getFile(uuid, name, off);
-				if(bb==null) // done
+				Object o=send(new GetFileReq(uuid, name, off));
+				if(o instanceof Done) // done
 					break;
-				int len=bb.remaining();
-				if(buf.length<len)
-					buf=new byte[len];
-				bb.get(buf, 0, len);
-				fos.write(buf, 0, len);
-				md.update(buf, 0, len);
-				off+=len;
+				byte[] buf=(byte[])o;
+				fos.write(buf);
+				md.update(buf);
+				off+=buf.length;
 				}
 			}
 		byte[] digest=md.digest();
-		return Arrays.equals(digest, h.bytes());
+		return Arrays.equals(digest, h.bytes);
 		}
 
-	public ByteBuffer getBloc(String name, int i, int len) throws SyncException, AvroRemoteException
+	public byte[] getBloc(String name, int i, int len) throws SyncException
 		{
-		return sync.getBloc(uuid, name, i, len);
+		return send(new GetBlocReq(uuid, name, i, len));
 		}
 
 	public void setListener(SyncListener listener)
@@ -325,31 +338,39 @@ public class SyncClient implements AutoCloseable
 			}
 		catch (SyncException e)
 			{
-			log.error(e.getDesc());
+			log.error(e.getMessage());
 			}
 		finally
 			{
-			cl.close();
+			try
+				{
+				cl.close();
+				}
+			catch (Exception e)
+				{
+				log.error("failed to close", e);
+				}
 			}
 		}
 
-	public void startAppend(String name) throws AvroRemoteException
+	public void startAppend(String name) throws SyncException
 		{
-		sync.startAppend(uuid, name);
+		kryo.write(out, new StartAppend(uuid, name));
 		}
 
-	public void appendData(ByteBuffer bbuf) throws AvroRemoteException
+	public void appendData(byte[] bbuf) throws SyncException
 		{
-		sync.appendData(uuid, bbuf);
+		kryo.write(out, new AppendData(uuid, bbuf));
 		}
 
-	public void appendBloc(Integer bloc, int count) throws AvroRemoteException
+	public void appendBloc(Integer bloc, int count) throws SyncException
 		{
-		sync.appendBloc(uuid, bloc, count);
+		kryo.write(out, new AppendBloc(uuid, bloc, count));
 		}
 
-	public FileDesc endAppend(Hash expectedHash) throws AvroRemoteException
+	public FileDesc endAppend(Hash expectedHash) throws SyncException
 		{
-		return sync.endAppend(uuid, expectedHash);
+		Object o=send(new EndAppend(uuid, expectedHash));
+		return o instanceof FileDesc?(FileDesc)o:null;
 		}
 	}

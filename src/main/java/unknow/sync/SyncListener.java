@@ -52,7 +52,7 @@ public interface SyncListener
 
 		public void doneCheckFile(String name)
 			{
-			log.info("Finished diff for '%s' in %.3f sec", name, (System.currentTimeMillis()-local)/100.);
+			log.info("Finished diff for '%s' in %.3f sec", name, (System.currentTimeMillis()-local)/1000.);
 			}
 
 		public void startReconstruct(String name)

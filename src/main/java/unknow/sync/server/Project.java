@@ -9,7 +9,7 @@ import org.apache.logging.log4j.*;
 
 import unknow.json.*;
 import unknow.sync.*;
-import unknow.sync.proto.*;
+import unknow.sync.proto.pojo.*;
 
 public class Project
 	{
@@ -35,12 +35,13 @@ public class Project
 		if(Files.isDirectory(root))
 			{
 			files=new ArrayList<FileDesc>();
-			projectInfo=new ProjectInfo(cfg.getInt("bloc_size"), new ArrayList<FileHash>());
-			FileDescLoader.load(files, root, projectInfo.getBlocSize(), null);
+			projectInfo=new ProjectInfo(cfg.getInt("bloc_size"), null);
+			FileDescLoader.load(files, root, projectInfo.blocSize, null);
+
+			projectInfo.hashs=new FileHash[files.size()];
+			int i=0;
 			for(FileDesc fd:files)
-				{
-				projectInfo.getHashs().add(new FileHash(fd.getName(), fd.getFileHash()));
-				}
+				projectInfo.hashs[i++]=new FileHash(fd.name, fd.fileHash);
 			}
 		else
 			throw new FileNotFoundException("project '"+name+"' path isn't a directory");
@@ -65,7 +66,7 @@ public class Project
 
 	public int blocSize()
 		{
-		return projectInfo.getBlocSize();
+		return projectInfo.blocSize;
 		}
 
 	public String path() throws JsonException
@@ -83,7 +84,7 @@ public class Project
 
 	public List<FileDesc> fileDesc()
 		{
-		synchronized (this) // change to readWriteLock
+		synchronized (this) // TODO change to readWriteLock
 			{
 			return files;
 			}
@@ -99,11 +100,20 @@ public class Project
 
 	public FileDesc reloadFile(String file) throws NoSuchAlgorithmException, FileNotFoundException, IOException
 		{
-		FileDesc fd=FileDescLoader.loadFile(root, Paths.get(file), projectInfo.getBlocSize());
+		FileDesc fd=FileDescLoader.loadFile(root, Paths.get(file), projectInfo.blocSize);
 		synchronized (this)
 			{
-			files.add(fd);
-			projectInfo.getHashs().add(new FileHash(fd.getName(), fd.getFileHash()));
+			for(int i=0; i<projectInfo.hashs.length; i++)
+				{
+				if(fd.name.equals(projectInfo.hashs[i].name))
+					{
+					files.set(i, fd);
+					projectInfo.hashs[i]=new FileHash(fd.name, fd.fileHash);
+					return fd;
+					}
+				}
+			projectInfo.hashs=Arrays.copyOf(projectInfo.hashs, projectInfo.hashs.length);
+			projectInfo.hashs[projectInfo.hashs.length-1]=new FileHash(fd.name, fd.fileHash);
 			}
 		return fd;
 		}
@@ -113,19 +123,20 @@ public class Project
 		synchronized (this)
 			{
 			Iterator<FileDesc> it1=files.iterator();
-			Iterator<FileHash> it2=projectInfo.getHashs().iterator();
+			int i=0;
 			while (it1.hasNext())
 				{
 				it1.next();
-				FileHash next=it2.next();
-				if(next.getName().equals(file))
+				FileHash next=projectInfo.hashs[i++];
+				if(next.name.equals(file))
 					{
 					try
 						{
 						Files.delete(root.resolve(file));
 
 						it1.remove();
-						it2.remove();
+						projectInfo.hashs[i-1]=projectInfo.hashs[projectInfo.hashs.length-1];
+						projectInfo.hashs=Arrays.copyOf(projectInfo.hashs, projectInfo.hashs.length-1);
 						return true;
 						}
 					catch (IOException e)

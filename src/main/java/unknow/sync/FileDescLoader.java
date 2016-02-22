@@ -10,7 +10,8 @@ import java.util.regex.*;
 
 import org.apache.logging.log4j.*;
 
-import unknow.sync.proto.*;
+import unknow.common.data.*;
+import unknow.sync.proto.pojo.*;
 
 public class FileDescLoader
 	{
@@ -42,27 +43,27 @@ public class FileDescLoader
 		{
 		Map<Integer,List<IndexedHash>> blocA=new HashMap<Integer,List<IndexedHash>>();
 		int i=0;
-		for(Bloc bloc:a.getBlocs())
+		for(Bloc bloc:a.blocs)
 			{
-			List<IndexedHash> l=blocA.get(bloc.getRoll());
+			List<IndexedHash> l=blocA.get(bloc.roll);
 			if(l==null)
 				{
 				l=new ArrayList<IndexedHash>();
-				blocA.put(bloc.getRoll(), l);
+				blocA.put(bloc.roll, l);
 				}
-			l.add(new IndexedHash(i++, bloc.getHash()));
+			l.add(new IndexedHash(i++, bloc.hash));
 			}
 
 		Map<Integer,Integer> map=new HashMap<Integer,Integer>();
-		loop: for(i=0; i<b.getBlocs().size(); i++)
+		loop: for(i=0; i<b.blocs.length; i++)
 			{
-			Bloc blocB=b.getBlocs().get(i);
-			List<IndexedHash> list=blocA.get(blocB.getRoll());
+			Bloc blocB=b.blocs[i];
+			List<IndexedHash> list=blocA.get(blocB.roll);
 			if(list!=null)
 				{
 				for(IndexedHash bloc:list)
 					{
-					if(blocB.getHash().equals(bloc.h))
+					if(blocB.hash.equals(bloc.h))
 						{
 						map.put(i, bloc.i);
 						continue loop;
@@ -78,7 +79,8 @@ public class FileDescLoader
 		MessageDigest md=MessageDigest.getInstance("SHA-512");
 		MessageDigest fileMd=MessageDigest.getInstance("SHA-512");
 
-		FileDesc desc=new FileDesc(file.toString(), new ArrayList<Bloc>(), null);
+		FileDesc desc=new FileDesc(file.toString(), null, null);
+		List<Bloc> list=new ArrayList<Bloc>();
 		try (FileInputStream fis=new FileInputStream(root.resolve(file).toString()))
 			{
 			byte[] buf=new byte[blocSize];
@@ -97,10 +99,11 @@ public class FileDescLoader
 					buf[s++]=++p;
 				h=md.digest(buf);
 				Bloc bloc=new Bloc(RollingChecksum.compute(buf), new Hash(h));
-				desc.getBlocs().add(bloc);
+				list.add(bloc);
 				}
 			h=fileMd.digest();
-			desc.setFileHash(new Hash(h));
+			desc.fileHash=new Hash(h);
+			desc.blocs=list.toArray(new Bloc[0]);
 			}
 		return desc;
 		}
@@ -184,22 +187,4 @@ public class FileDescLoader
 			this.h=h;
 			}
 		}
-
-//	public static void main(String[] arg) throws Exception
-//		{
-//		Set<FileDesc> set=new ArraySet<FileDesc>(10, 2);
-//
-//		long t=System.currentTimeMillis();
-//		load(set, "/usr/lib/jvm", "", 1024);
-//		System.out.println("computing hash: "+(System.currentTimeMillis()-t)+" ms");
-//
-////		set.clear();
-////
-////		t=System.currentTimeMillis();
-////		load(set, "/usr/lib/jvm", "", 1024);
-////		System.out.println("computing hash: "+(System.currentTimeMillis()-t)+" ms");
-//
-//		FileDesc next=set.iterator().next();
-//		log.info(next);
-//		}
 	}
