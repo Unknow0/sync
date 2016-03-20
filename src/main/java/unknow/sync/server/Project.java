@@ -69,9 +69,9 @@ public class Project
 		return projectInfo.blocSize;
 		}
 
-	public String path() throws JsonException
+	public String path()
 		{
-		return cfg.getString("path");
+		return cfg.optString("path");
 		}
 
 	public FileDesc fileDesc(int i)
@@ -112,8 +112,9 @@ public class Project
 					return fd;
 					}
 				}
-			projectInfo.hashs=Arrays.copyOf(projectInfo.hashs, projectInfo.hashs.length);
+			projectInfo.hashs=Arrays.copyOf(projectInfo.hashs, projectInfo.hashs.length+1);
 			projectInfo.hashs[projectInfo.hashs.length-1]=new FileHash(fd.name, fd.fileHash);
+			files.add(fd);
 			}
 		return fd;
 		}

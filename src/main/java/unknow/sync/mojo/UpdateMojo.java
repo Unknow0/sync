@@ -1,17 +1,15 @@
 package unknow.sync.mojo;
 
 import org.apache.maven.plugin.*;
+import org.apache.maven.plugins.annotations.*;
+import org.apache.maven.plugins.annotations.Mojo;
 
 import unknow.sync.*;
 
-/**
- * @goal update
- */
+@Mojo(name="update")
 public class UpdateMojo extends SyncMojo
 	{
-	/**
-	 * @parameter default-value=false
-	 */
+	@Parameter(property="sync.delete", defaultValue="false")
 	private boolean delete;
 
 	public void execute() throws MojoExecutionException, MojoFailureException

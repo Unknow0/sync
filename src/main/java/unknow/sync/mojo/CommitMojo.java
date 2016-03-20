@@ -1,12 +1,11 @@
 package unknow.sync.mojo;
 
 import org.apache.maven.plugin.*;
+import org.apache.maven.plugins.annotations.Mojo;
 
 import unknow.sync.*;
 
-/**
- * @goal commit
- */
+@Mojo(name="commit")
 public class CommitMojo extends SyncMojo
 	{
 	public void execute() throws MojoExecutionException, MojoFailureException

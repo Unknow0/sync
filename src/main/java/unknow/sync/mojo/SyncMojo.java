@@ -1,51 +1,37 @@
 package unknow.sync.mojo;
 
+import java.util.*;
 import java.util.regex.*;
 
 import org.apache.maven.plugin.*;
+import org.apache.maven.plugins.annotations.*;
 
 public abstract class SyncMojo extends AbstractMojo
 	{
-	/**
-	 * @parameter default-value="${project.build.directory}"
-	 */
+	@Parameter(property="sync.baseDir", defaultValue="${project.build.directory}")
 	protected String baseDir;
 
-	/**
-	 * @parameter
-	 * @required
-	 */
+	@Parameter(property="sync.host", required=true)
 	protected String host;
 
-	/**
-	 * @parameter
-	 * @required
-	 */
+	@Parameter(property="sync.port", required=true)
 	protected int port;
 
-	/**
-	 * @parameter
-	 * @required
-	 */
+	@Parameter(property="sync.project", required=true)
 	protected String project;
 
-	/**
-	 * @parameter
-	 */
+	@Parameter(property="sync.match")
 	private String[] match;
 
-	/**
-	 * @parameter default-value="anonymous"
-	 */
+	@Parameter(property="sync.login", defaultValue="anonymous")
 	protected String login;
 
-	/**
-	 * @parameter default-value=""
-	 */
+	@Parameter(property="sync.password", defaultValue="")
 	protected String password;
 
 	protected Pattern pattern()
 		{
+		getLog().error(Arrays.toString(match));
 		if(match==null||match.length==0)
 			return null;
 		if(match.length==1)
