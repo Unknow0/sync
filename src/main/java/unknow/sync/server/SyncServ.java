@@ -47,6 +47,7 @@ public class SyncServ
 
 		log.info("ready");
 		shell=new Shell(this);
+		shell.start();
 		}
 
 	/**
