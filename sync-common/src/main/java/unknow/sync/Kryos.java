@@ -43,7 +43,7 @@ public class Kryos implements KryoFactory {
 	}
 
 	private static void addClass(Class<?> c) {
-		if (c == Object.class || c == null || register.contains(c))
+		if (c == Object.class || c == null || c == Enum.class || register.contains(c))
 			return;
 		register.add(c);
 		if (c.isArray()) {
