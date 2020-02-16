@@ -1,5 +1,10 @@
 package unknow.sync;
 
+import java.lang.reflect.Field;
+import java.lang.reflect.Modifier;
+import java.util.HashSet;
+import java.util.Set;
+
 import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
@@ -20,26 +25,47 @@ import unknow.sync.proto.pojo.Done;
 import unknow.sync.proto.pojo.FileDesc;
 
 public class Kryos implements KryoFactory {
+	private static final int STATIC_TRANSIANT = Modifier.STATIC | Modifier.TRANSIENT;
+	private static final Set<Class<?>> register = new HashSet<>();
+	static {
+		addClass(LoginReq.class);
+		addClass(LoginRes.class);
+		addClass(GetFileDescs.class);
+		addClass(FileDesc[].class);
+		addClass(GetBlocReq.class);
+		addClass(DeleteReq.class);
+		addClass(GetFileReq.class);
+		addClass(StartAppend.class);
+		addClass(AppendData.class);
+		addClass(AppendBloc.class);
+		addClass(EndAppend.class);
+		addClass(Done.class);
+	}
+
+	private static void addClass(Class<?> c) {
+		if (c == Object.class || c == null || register.contains(c))
+			return;
+		register.add(c);
+		if (c.isArray()) {
+			addClass(c.getComponentType());
+			return; // don't hash array
+		}
+		for (Field f : c.getDeclaredFields()) {
+			if ((f.getModifiers() & STATIC_TRANSIANT) != 0)
+				continue;
+			addClass(f.getType());
+		}
+		addClass(c.getSuperclass());
+	}
+
 	private final KryoPool pool = new KryoPool.Builder(this).build();
 
 	@Override
 	public Kryo create() {
 		Kryo kryo = new Kryo();
 		kryo.setRegistrationRequired(true);
-		kryo.register(LoginReq.class);
-		kryo.register(LoginRes.class);
-		kryo.register(GetFileDescs.class);
-		kryo.register(FileDesc[].class);
-		kryo.register(GetBlocReq.class);
-		kryo.register(byte[].class);
-		kryo.register(DeleteReq.class);
-		kryo.register(boolean.class);
-		kryo.register(GetFileReq.class);
-		kryo.register(StartAppend.class);
-		kryo.register(AppendData.class);
-		kryo.register(AppendBloc.class);
-		kryo.register(EndAppend.class);
-		kryo.register(Done.class);
+		for (Class<?> c : register)
+			kryo.register(c);
 		return kryo;
 	}
 
