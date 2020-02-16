@@ -22,6 +22,7 @@ public class KryoEncoder extends MessageToByteEncoder<Object> {
 		ByteBufOutputStream buf = new ByteBufOutputStream(out);
 		Output output = new Output(buf);
 		kryos.write(output, data);
+		output.close();
 		log.trace("{}", data);
 	}
 }

@@ -41,8 +41,6 @@ public class Kryos implements KryoFactory {
 		addClass(AppendBloc.class);
 		addClass(EndAppend.class);
 		addClass(Done.class);
-
-		System.err.println(">> " + register);
 	}
 
 	private static void addClass(Class<?> c) {
