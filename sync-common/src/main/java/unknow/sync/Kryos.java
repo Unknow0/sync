@@ -2,8 +2,8 @@ package unknow.sync;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
-import java.util.HashSet;
-import java.util.Set;
+import java.util.ArrayList;
+import java.util.List;
 
 import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;
@@ -26,7 +26,7 @@ import unknow.sync.proto.pojo.FileDesc;
 
 public class Kryos implements KryoFactory {
 	private static final int STATIC_TRANSIANT = Modifier.STATIC | Modifier.TRANSIENT;
-	private static final Set<Class<?>> register = new HashSet<>();
+	private static final List<Class<?>> register = new ArrayList<>();
 	static {
 		addClass(LoginReq.class);
 		addClass(LoginRes.class);
