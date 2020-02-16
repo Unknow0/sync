@@ -69,6 +69,7 @@ public class Kryos implements KryoFactory {
 	public Kryo create() {
 		Kryo kryo = new Kryo();
 		kryo.setRegistrationRequired(true);
+		kryo.setReferences(false);
 		for (Class<?> c : register)
 			kryo.register(c);
 		return kryo;
