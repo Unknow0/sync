@@ -41,10 +41,11 @@ public class Kryos implements KryoFactory {
 		addClass(AppendBloc.class);
 		addClass(EndAppend.class);
 		addClass(Done.class);
+		System.err.println(register);
 	}
 
 	private static void addClass(Class<?> c) {
-		if (c == Object.class || c == null || c == Enum.class || register.contains(c))
+		if (c == Object.class || c == null || c == Enum.class || c.isPrimitive() || c==String.class || register.contains(c))
 			return;
 		register.add(c);
 		if (c.isArray()) {
