@@ -1,8 +1,9 @@
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
 	<modelVersion>4.0.0</modelVersion>
-	<artifactId>sync</artifactId>
+	<groupId>unknow.sync</groupId>
+	<artifactId>root</artifactId>
 	<version>1.0-SNAPSHOT</version>
-	<packaging>maven-plugin</packaging>
+	<packaging>pom</packaging>
 
 	<name>Unknow sync</name>
 	<description>Synchronization system</description>
@@ -15,8 +16,8 @@
 		</license>
 	</licenses>
 	<scm>
-		<url>https://github.com/Unknow0/unknow-orm.git</url>
-		<connection>scm:git:https://github.com/Unknow0/unknow-orm.git</connection>
+		<url>https://github.com/Unknow0/sync.git</url>
+		<connection>scm:git:https://github.com/Unknow0/sync.git</connection>
 	</scm>
 	<developers>
 		<developer>
@@ -29,12 +30,12 @@
 	<properties>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 	</properties>
-
-	<parent>
-		<groupId>unknow</groupId>
-		<artifactId>root</artifactId>
-		<version>1.1</version>
-	</parent>
+	
+	<modules>
+		<module>sync-client</module>
+		<module>sync-common</module>
+		<module>sync-server</module>
+	</modules>
 
 	<build>
 		<plugins>
@@ -42,59 +43,13 @@
 				<artifactId>maven-compiler-plugin</artifactId>
 				<version>3.1</version>
 				<configuration>
-					<source>7</source>
-					<target>7</target>
+					<source>8</source>
+					<target>8</target>
 				</configuration>
-			</plugin>
-			<plugin>
-				<groupId>org.apache.maven.plugins</groupId>
-				<artifactId>maven-plugin-plugin</artifactId>
-				<version>3.4</version>
-				<executions>
-					<execution>
-						<id>default-descriptor</id>
-						<phase>process-classes</phase>
-					</execution>
-					<execution>
-						<id>help-goal</id>
-						<goals>
-							<goal>helpmojo</goal>
-						</goals>
-					</execution>
-				</executions>
-			</plugin>
-			<plugin>
-				<groupId>org.apache.maven.plugins</groupId>
-				<artifactId>maven-dependency-plugin</artifactId>
-				<executions>
-					<execution>
-						<id>copy-dependencies</id>
-						<phase>prepare-package</phase>
-						<goals>
-							<goal>copy-dependencies</goal>
-						</goals>
-						<configuration>
-							<outputDirectory>${project.build.directory}/lib</outputDirectory>
-							<overWriteReleases>false</overWriteReleases>
-							<overWriteSnapshots>true</overWriteSnapshots>
-							<overWriteIfNewer>true</overWriteIfNewer>
-						</configuration>
-					</execution>
-				</executions>
 			</plugin>
 		</plugins>
 	</build>
 	<dependencies>
-		<dependency>
-			<groupId>unknow.json</groupId>
-			<artifactId>json</artifactId>
-			<version>1.1</version>
-		</dependency>
-		<dependency>
-			<groupId>unknow.common</groupId>
-			<artifactId>common</artifactId>
-			<version>1.4-SNAPSHOT</version>
-		</dependency>
 		<dependency>
 			<groupId>io.netty</groupId>
 			<artifactId>netty-all</artifactId>
