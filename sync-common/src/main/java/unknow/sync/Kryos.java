@@ -3,6 +3,7 @@ package unknow.sync;
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 import com.esotericsoftware.kryo.Kryo;
@@ -40,6 +41,8 @@ public class Kryos implements KryoFactory {
 		addClass(AppendBloc.class);
 		addClass(EndAppend.class);
 		addClass(Done.class);
+
+		System.err.println(">> " + register);
 	}
 
 	private static void addClass(Class<?> c) {
@@ -48,9 +51,11 @@ public class Kryos implements KryoFactory {
 		register.add(c);
 		if (c.isArray()) {
 			addClass(c.getComponentType());
-			return; // don't hash array
+			return;
 		}
-		for (Field f : c.getDeclaredFields()) {
+		Field[] fields = c.getDeclaredFields();
+		Arrays.sort(fields, (a, b) -> a.getName().compareTo(b.getName()));
+		for (Field f : fields) {
 			if ((f.getModifiers() & STATIC_TRANSIANT) != 0)
 				continue;
 			addClass(f.getType());
