@@ -13,12 +13,10 @@ import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.Callable;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
+import java.util.function.Consumer;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -31,19 +29,10 @@ import unknow.sync.proto.pojo.Hash;
 
 public class FileDescLoader {
 	private static final Logger log = LoggerFactory.getLogger(FileDescLoader.class);
-	private static final ExecutorService exec = Executors.newCachedThreadPool();
 
 	public static void load(Collection<FileDesc> files, Path root, int blocSize, Pattern pattern) throws IOException {
 		root = root.toAbsolutePath().normalize();
-		Visitor visitor = new Visitor(root, blocSize, pattern);
-		Files.walkFileTree(root, visitor);
-		for (Future<FileDesc> future : visitor.futures()) {
-			try {
-				files.add(future.get());
-			} catch (Exception e) {
-				log.error("", e);
-			}
-		}
+		Files.walkFileTree(root, new Visitor(root, blocSize, pattern, files::add));
 	}
 
 	/**
@@ -77,47 +66,63 @@ public class FileDescLoader {
 		return map;
 	}
 
-	public static FileDesc loadFile(Path root, Path file, int blocSize) throws NoSuchAlgorithmException, FileNotFoundException, IOException {
-		MessageDigest md = MessageDigest.getInstance("SHA-512");
-		MessageDigest fileMd = MessageDigest.getInstance("SHA-512");
+	public static FileDesc loadFile(Path root, Path file, int blocSize) throws FileNotFoundException, IOException {
+		try {
+			MessageDigest md = MessageDigest.getInstance("SHA-512");
+			MessageDigest fileMd = MessageDigest.getInstance("SHA-512");
 
-		FileDesc desc = new FileDesc(file.toString(), null, null);
-		List<Bloc> list = new ArrayList<Bloc>();
-		try (FileInputStream fis = new FileInputStream(root.resolve(file).toString())) {
-			byte[] buf = new byte[blocSize];
-			byte[] h;
-			int s;
-			while ((s = fis.read(buf)) != -1) {
-				int c;
-				while (s < buf.length && (c = fis.read()) != -1)
-					buf[s++] = (byte) c;
-				fileMd.update(buf, 0, s);
+			FileDesc desc = new FileDesc(toString(file), null, null);
+			List<Bloc> list = new ArrayList<Bloc>();
+			try (FileInputStream fis = new FileInputStream(root.resolve(file).toString())) {
+				byte[] buf = new byte[blocSize];
+				byte[] h;
+				int s;
+				while ((s = fis.read(buf)) != -1) {
+					int c;
+					while (s < buf.length && (c = fis.read()) != -1)
+						buf[s++] = (byte) c;
+					fileMd.update(buf, 0, s);
 
-				// padding
-				byte p = 0;
-				while (s < buf.length)
-					buf[s++] = ++p;
-				h = md.digest(buf);
-				Bloc bloc = new Bloc(RollingChecksum.compute(buf), new Hash(h));
-				list.add(bloc);
+					// padding
+					byte p = 0;
+					while (s < buf.length)
+						buf[s++] = ++p;
+					h = md.digest(buf);
+					Bloc bloc = new Bloc(RollingChecksum.compute(buf), new Hash(h));
+					list.add(bloc);
+				}
+				h = fileMd.digest();
+				desc.fileHash = new Hash(h);
+				desc.blocs = list.toArray(new Bloc[0]);
 			}
-			h = fileMd.digest();
-			desc.fileHash = new Hash(h);
-			desc.blocs = list.toArray(new Bloc[0]);
+			return desc;
+		} catch (NoSuchAlgorithmException e) {
+			throw new IOException(e);
 		}
-		return desc;
+	}
+
+	public static String toString(Path p) {
+		StringBuilder sb = new StringBuilder();
+		Iterator<Path> it = p.iterator();
+		sb.append(it.next().toString());
+		while (it.hasNext()) {
+			sb.append('/');
+			sb.append(it.next().toString());
+		}
+		return sb.toString();
 	}
 
 	private static class Visitor implements FileVisitor<Path> {
 		private Path root;
 		private int blocSize;
 		private Matcher m;
-		private List<Future<FileDesc>> futures = new ArrayList<>();
+		private Consumer<FileDesc> c;
 
-		public Visitor(Path root, int blocFile, Pattern pattern) {
+		public Visitor(Path root, int blocFile, Pattern pattern, Consumer<FileDesc> c) {
 			this.root = root;
 			this.blocSize = blocFile;
 			this.m = pattern == null ? null : pattern.matcher("");
+			this.c = c;
 		}
 
 		public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) throws IOException {
@@ -131,7 +136,7 @@ public class FileDescLoader {
 				if (m != null)
 					m.reset(root.relativize(file).toString());
 				if (m == null || m.matches())
-					futures.add(exec.submit(new FileLoader(root, file, blocSize)));
+					c.accept(loadFile(root, root.relativize(file), blocSize));
 			}
 			return FileVisitResult.CONTINUE;
 		}
@@ -142,26 +147,6 @@ public class FileDescLoader {
 
 		public FileVisitResult postVisitDirectory(Path dir, IOException exc) throws IOException {
 			return FileVisitResult.CONTINUE;
-		}
-
-		public List<Future<FileDesc>> futures() {
-			return futures;
-		}
-	}
-
-	private static class FileLoader implements Callable<FileDesc> {
-		private Path file;
-		private int blocSize;
-		private Path root;
-
-		public FileLoader(Path root, Path file, int blocSize) throws IOException {
-			this.root = root;
-			this.file = file;
-			this.blocSize = blocSize;
-		}
-
-		public FileDesc call() throws Exception {
-			return loadFile(root, root.relativize(file), blocSize);
 		}
 	}
 
