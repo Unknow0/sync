@@ -5,7 +5,7 @@ on:
     tags:
       - 'release/*'
 env:
-  GITHUB_TOKEN: ${{secret.TOKEN}}
+  GITHUB_TOKEN: ${{secrets.TOKEN}}
 
 jobs:
   build:
