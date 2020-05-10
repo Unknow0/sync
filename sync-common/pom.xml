@@ -9,9 +9,9 @@
 
 	<dependencies>
 		<dependency>
-			<groupId>com.esotericsoftware</groupId>
-			<artifactId>kryo</artifactId>
-			<version>3.0.3</version>
+			<groupId>unknow.common</groupId>
+			<artifactId>unknow-serialize</artifactId>
+			<version>1.0.1</version>
 		</dependency>
 	</dependencies>
 </project>

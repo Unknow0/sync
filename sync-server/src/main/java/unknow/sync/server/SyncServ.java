@@ -4,6 +4,7 @@ import java.io.File;
 import java.io.IOException;
 import java.security.NoSuchAlgorithmException;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 
@@ -13,17 +14,21 @@ import org.slf4j.LoggerFactory;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import io.netty.bootstrap.ServerBootstrap;
+import io.netty.buffer.ByteBuf;
+import io.netty.buffer.ByteBufInputStream;
+import io.netty.buffer.ByteBufOutputStream;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelHandler.Sharable;
+import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInitializer;
 import io.netty.channel.ChannelOption;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
-import unknow.sync.KryoDecoder;
-import unknow.sync.KryoEncoder;
-import unknow.sync.Kryos;
+import io.netty.handler.codec.ByteToMessageDecoder;
+import io.netty.handler.codec.MessageToByteEncoder;
+import unknow.sync.Serialize;
 import unknow.sync.proto.pojo.UUID;
 import unknow.sync.server.Cfg.P;
 
@@ -42,9 +47,9 @@ public class SyncServ {
 
 	// private Shell shell;
 
-	public SyncServ(Cfg c) throws IOException, NoSuchAlgorithmException {
+	public SyncServ(Cfg c) throws IOException {
 		cfg = c;
-		projects = new HashMap<String, Project>();
+		projects = new HashMap<>();
 		states = new HashMap<>();
 		log.info("load");
 		loadProjects();
@@ -59,14 +64,13 @@ public class SyncServ {
 	 * 
 	 * @throws IOException
 	 * @throws NoSuchAlgorithmException
-	 * @throws JsonException
 	 */
 	public void reload() throws IOException, NoSuchAlgorithmException {
 		projects.clear();
 		loadProjects();
 	}
 
-	private void loadProjects() throws NoSuchAlgorithmException, IOException {
+	private void loadProjects() throws IOException {
 		for (Entry<String, P> e : cfg.projects.entrySet())
 			projects.put(e.getKey(), new Project(e.getKey(), e.getValue()));
 	}
@@ -117,15 +121,15 @@ public class SyncServ {
 		return new UUID(b);
 	}
 
-	public static void main(String arg[]) throws NoSuchAlgorithmException, IOException, InterruptedException {
+	public static void main(String arg[]) throws IOException, InterruptedException {
 		// Cfg cfg = Cfg.getSystem();
 		// if (arg.length != 0)
 		// cfg = new Cfg(arg[0]);
 		Cfg cfg = new ObjectMapper().readValue(new File("sync.cfg"), Cfg.class);
 		System.out.println(cfg);
 		SyncServ serv = new SyncServ(cfg);
-		final Kryos kryos = new Kryos();
 		final SyncHandler handler = new SyncHandler(serv);
+		final Encoder encoder = new Encoder();
 
 		EventLoopGroup bossGroup = new NioEventLoopGroup();
 		EventLoopGroup workerGroup = new NioEventLoopGroup();
@@ -134,7 +138,7 @@ public class SyncServ {
 			b.group(bossGroup, workerGroup).channel(NioServerSocketChannel.class).childHandler(new ChannelInitializer<SocketChannel>() { // (4)
 				@Override
 				public void initChannel(SocketChannel ch) throws Exception {
-					ch.pipeline().addLast(new KryoDecoder(kryos), new KryoEncoder(kryos), handler);
+					ch.pipeline().addLast(new Decoder(), encoder, handler);
 				}
 			}).option(ChannelOption.SO_BACKLOG, 128).childOption(ChannelOption.SO_KEEPALIVE, true);
 
@@ -162,5 +166,38 @@ public class SyncServ {
 
 	public Map<String, Project> projects() {
 		return projects;
+	}
+
+	private static class Decoder extends ByteToMessageDecoder {
+		@Override
+		protected void decode(ChannelHandlerContext ctx, ByteBuf in, List<Object> out) throws Exception {
+			if (in.readableBytes() < 1)
+				return;
+			in.markReaderIndex();
+			try {
+				Object o = Serialize.read(new ByteBufInputStream(in));
+				out.add(o);
+				log.trace("read: {}", o);
+			} catch (IOException e) {
+				in.resetReaderIndex();
+				if (!"end of stream reached".equals(e.getMessage()))
+					log.error("decoder error", e);
+			}
+		}
+	}
+
+	@Sharable
+	private static class Encoder extends MessageToByteEncoder<Object> {
+		@Override
+		protected void encode(ChannelHandlerContext ctx, Object data, ByteBuf buf) throws Exception {
+			try {
+				log.trace("write: {}", data);
+				ByteBufOutputStream out = new ByteBufOutputStream(buf);
+				Serialize.write(out, data);
+			} catch (Throwable e) {
+				log.error(e.getMessage(), e);
+				ctx.close();
+			}
+		}
 	}
 }

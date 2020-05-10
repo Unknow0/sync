@@ -29,13 +29,13 @@ public class CommitProcessor {
 			Bloc b = server.blocs[i];
 			List<IndexedHash> list = hash.get(b.roll);
 			if (list == null) {
-				list = new ArrayList<IndexedHash>(1);
+				list = new ArrayList<>(1);
 				hash.put(b.roll, list);
 			}
 			list.add(new IndexedHash(i, b.hash));
 		}
 
-		Map<Long, Integer> blocFound = new HashMap<Long, Integer>();
+		Map<Long, Integer> blocFound = new HashMap<>();
 		File file = new File(client.path.toFile(), local.name);
 		long fileSize = file.length();
 		try {

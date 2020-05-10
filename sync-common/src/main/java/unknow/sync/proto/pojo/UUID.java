@@ -14,10 +14,12 @@ public class UUID {
 		this.bytes = bytes;
 	}
 
+	@Override
 	public int hashCode() {
 		return Arrays.hashCode(bytes);
 	}
 
+	@Override
 	public boolean equals(Object o) {
 		if (o == null)
 			return false;

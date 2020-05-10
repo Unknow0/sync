@@ -25,14 +25,14 @@ public class UpdateProcessor {
 	public static void update(SyncClient client, FileDesc local, FileDesc server) throws NoSuchAlgorithmException, IOException, SyncException {
 		if (client.listener != null)
 			client.listener.startFile(local.name);
-		Map<Integer, Long> blocFound = new HashMap<Integer, Long>();
+		Map<Integer, Long> blocFound = new HashMap<>();
 
 		Map<Integer, List<IndexedHash>> hash = new HashMap<>();
 		for (int i = 0; i < server.blocs.length; i++) {
 			Bloc b = server.blocs[i];
 			List<IndexedHash> list = hash.get(b.roll);
 			if (list == null) {
-				list = new ArrayList<IndexedHash>(1);
+				list = new ArrayList<>(1);
 				hash.put(b.roll, list);
 			}
 			list.add(new IndexedHash(i, b.hash));

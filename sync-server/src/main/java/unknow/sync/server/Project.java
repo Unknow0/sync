@@ -5,7 +5,6 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Iterator;
@@ -30,7 +29,7 @@ public class Project {
 
 	private ProjectInfo projectInfo;
 
-	public Project(String prj, Cfg.P cfg) throws NoSuchAlgorithmException, IOException {
+	public Project(String prj, Cfg.P cfg) throws IOException {
 		name = prj;
 		this.cfg = cfg;
 
@@ -41,7 +40,7 @@ public class Project {
 			Files.createDirectories(root);
 		}
 		if (Files.isDirectory(root)) {
-			files = new ArrayList<FileDesc>();
+			files = new ArrayList<>();
 			projectInfo = new ProjectInfo(cfg.bloc_size, null);
 			FileDescLoader.load(files, root, projectInfo.blocSize, null);
 
@@ -84,7 +83,7 @@ public class Project {
 		}
 	}
 
-	public FileDesc reloadFile(String file) throws NoSuchAlgorithmException, FileNotFoundException, IOException {
+	public FileDesc reloadFile(String file) throws FileNotFoundException, IOException {
 		FileDesc fd = FileDescLoader.loadFile(root, Paths.get(file), projectInfo.blocSize);
 		synchronized (this) {
 			for (int i = 0; i < projectInfo.hashs.length; i++) {

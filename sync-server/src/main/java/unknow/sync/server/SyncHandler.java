@@ -24,6 +24,7 @@ public class SyncHandler extends ChannelHandlerAdapter {
 		this.serv = serv;
 	}
 
+	@Override
 	public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
 		Object res = null;
 		try {

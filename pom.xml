@@ -15,10 +15,7 @@
 			<distribution>repo</distribution>
 		</license>
 	</licenses>
-	<scm>
-		<url>https://github.com/Unknow0/sync.git</url>
-		<connection>scm:git:https://github.com/Unknow0/sync.git</connection>
-	</scm>
+
 	<developers>
 		<developer>
 			<id>Unknow0</id>
@@ -27,10 +24,18 @@
 		</developer>
 	</developers>
 
+	<distributionManagement>
+		<repository>
+			<id>github</id>
+			<name>GitHub Packages</name>
+			<url>https://maven.pkg.github.com/Unknow0/sync</url>
+		</repository>
+	</distributionManagement>
+
 	<properties>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 	</properties>
-	
+
 	<modules>
 		<module>sync-client</module>
 		<module>sync-common</module>
