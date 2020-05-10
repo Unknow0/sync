@@ -17,7 +17,9 @@ jobs:
         java-version: 1.8
 
     - name: set version
-      run: mvn -B versions:set -DnewVersion=${GITHUB_REF##*/} -s .github/settings.xml
+      run: |
+	    env
+	    mvn -B versions:set -DnewVersion=${GITHUB_REF##*/} -s .github/settings.xml
       env:
         GITHUB_TOKEN: ${secret.TOKEN}
 
