@@ -31,12 +31,6 @@
 			<url>https://maven.pkg.github.com/Unknow0/sync</url>
 		</repository>
 	</distributionManagement>
-	<repositories>
-		<repository>
-			<id>github</id>
-			<url>https://maven.pkg.github.com/Unknow0/unknow-common</url>
-		</repository>
-	</repositories>
 
 	<properties>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
