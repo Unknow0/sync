@@ -18,10 +18,18 @@ import unknow.sync.proto.pojo.Bloc;
 import unknow.sync.proto.pojo.FileDesc;
 import unknow.sync.proto.pojo.Hash;
 
+/**
+ * process a commit
+ * 
+ * @author unknow
+ */
 public class CommitProcessor {
 	/**
+	 * @param client
+	 * @param local
+	 * @param server
 	 * @throws SyncException
-	 * @retrun fileSize
+	 * @return fileSize
 	 */
 	public static long commit(SyncClient client, FileDesc local, FileDesc server) throws SyncException {
 		Map<Integer, List<IndexedHash>> hash = new HashMap<>();
@@ -129,6 +137,18 @@ public class CommitProcessor {
 		}
 	}
 
+	/**
+	 * reconstruct a file
+	 * 
+	 * @param client
+	 * @param blocFound
+	 * @param server
+	 * @param expectedHash
+	 * @param file
+	 * @return the result of the reconstruction
+	 * @throws IOException
+	 * @throws SyncException
+	 */
 	public static FileDesc sendReconstruct(SyncClient client, Map<Long, Integer> blocFound, FileDesc server, Hash expectedHash, File file) throws IOException, SyncException {
 		if (blocFound.size() == server.blocs.length)
 			return null; // file doesnt change
@@ -189,7 +209,12 @@ public class CommitProcessor {
 	}
 
 	/**
+	 * send a file to the server
+	 * 
+	 * @param client
+	 * @param local
 	 * @return fileSize
+	 * @throws IOException
 	 * @throws SyncException
 	 */
 	public static long send(SyncClient client, FileDesc local) throws IOException, SyncException {

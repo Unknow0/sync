@@ -9,6 +9,11 @@ import org.kohsuke.args4j.Option;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+/**
+ * the command line interface
+ * 
+ * @author unknow
+ */
 public class Cli {
 	private static final Logger log = LoggerFactory.getLogger(Cli.class);
 
@@ -38,6 +43,10 @@ public class Cli {
 		public String project;
 	}
 
+	/**
+	 * @param arg
+	 * @throws Throwable
+	 */
 	public static void main(String arg[]) throws Throwable {
 		Cfg cfg = new Cfg();
 
