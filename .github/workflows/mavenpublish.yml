@@ -4,6 +4,8 @@ on:
   push:
     tags:
       - 'release/*'
+env:
+  GITHUB_TOKEN: ${{secret.TOKEN}}
 
 jobs:
   build:
@@ -17,18 +19,10 @@ jobs:
         java-version: 1.8
 
     - name: set version
-      run: |
-        env
-        mvn -B versions:set -DnewVersion=${GITHUB_REF##*/} -s .github/settings.xml
-      env:
-        GITHUB_TOKEN: ${secret.TOKEN}
+      run: mvn -B versions:set -DnewVersion=${GITHUB_REF##*/} -s .github/settings.xml
 
     - name: build
       run: mvn -B javadoc:jar source:jar package -s .github/settings.xml
-      env:
-        GITHUB_TOKEN: ${secret.TOKEN}
 
     - name: Publish to GitHub Packages Apache Maven
       run: mvn -B deploy -s .github/settings.xml
-      env:
-        GITHUB_TOKEN: ${secret.TOKEN}
