@@ -11,7 +11,7 @@
     <profile>
       <id>github</id>
 	  <properties>
-        <altReleaseDeploymentRepository>github::default::https://maven.pkg.github.com/Unknow0/unknow-common</altReleaseDeploymentRepository>
+        <altDeploymentRepository>github::default::https://maven.pkg.github.com/Unknow0/unknow-common</altDeploymentRepository>
       </properties>
       <repositories>
         <repository>
