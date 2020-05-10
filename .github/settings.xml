@@ -10,6 +10,9 @@
   <profiles>
     <profile>
       <id>github</id>
+	  <properties>
+        <altReleaseDeploymentRepository>github::default::https://maven.pkg.github.com/Unknow0/unknow-common</altReleaseDeploymentRepository>
+      </properties>
       <repositories>
         <repository>
           <id>github</id>
@@ -30,7 +33,7 @@
     <server>
       <id>github</id>
       <username>Unknow0</username>
-      <password>${env.secret.TOKEN}</password>
+      <password>${env.GITHUB_TOKEN}</password>
     </server>
   </servers>
 </settings>

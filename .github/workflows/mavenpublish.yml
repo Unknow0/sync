@@ -4,6 +4,8 @@ on:
   push:
     tags:
       - 'release/*'
+env:
+  GITHUB_TOKEN: ${secret.TOKEN}
 
 jobs:
   build:
