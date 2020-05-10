@@ -16,12 +16,14 @@ jobs:
       with:
         java-version: 1.8
         server-id: github # Value of the distributionManagement/repository/id field of the pom.xml
-        settings-path: ${{ github.workspace }} # location for the settings.xml file
 
     - name: set version
       run: mvn -B versions:set -DnewVersion=${GITHUB_REF##*/}
 
+    - name: build
+	  run: mvn -B javadoc:jar source:jar package
+
     - name: Publish to GitHub Packages Apache Maven
-      run: mvn -B javadoc:jar source:jar deploy -s $GITHUB_WORKSPACE/settings.xml
+      run: mvn -B deploy
       env:
         GITHUB_TOKEN: ${{ github.token }}
