@@ -24,15 +24,33 @@ import unknow.sync.proto.pojo.Bloc;
 import unknow.sync.proto.pojo.FileDesc;
 import unknow.sync.proto.pojo.Hash;
 
+/**
+ * utilities to manage FileDesc
+ * 
+ * @author unknow
+ */
 public class FileDescLoader {
 
+	/**
+	 * load all file desc
+	 * 
+	 * @param files    output
+	 * @param root     root to look for file
+	 * @param blocSize bloc size for file desc
+	 * @param pattern  only matching file will be loaded
+	 * @throws IOException
+	 */
 	public static void load(Collection<FileDesc> files, Path root, int blocSize, Pattern pattern) throws IOException {
 		root = root.toAbsolutePath().normalize();
 		Files.walkFileTree(root, new Visitor(root, blocSize, pattern, files::add));
 	}
 
 	/**
-	 * @return matching bloc B bloc -> A bloc
+	 * find matching bloc in two file
+	 * 
+	 * @param a file a
+	 * @param b file b
+	 * @return matching bloc B bloc -&gt; A bloc
 	 */
 	public static Map<Integer, Integer> diff(FileDesc a, FileDesc b) {
 		Map<Integer, List<IndexedHash>> blocA = new HashMap<>();
@@ -62,6 +80,16 @@ public class FileDescLoader {
 		return map;
 	}
 
+	/**
+	 * load a filedesc
+	 * 
+	 * @param root     root path
+	 * @param file     the file path
+	 * @param blocSize the size of blocs
+	 * @return the file desc
+	 * @throws FileNotFoundException
+	 * @throws IOException
+	 */
 	public static FileDesc loadFile(Path root, Path file, int blocSize) throws FileNotFoundException, IOException {
 		try {
 			MessageDigest md = MessageDigest.getInstance("SHA-512");
@@ -97,6 +125,12 @@ public class FileDescLoader {
 		}
 	}
 
+	/**
+	 * path toString
+	 * 
+	 * @param p
+	 * @return the path to string
+	 */
 	public static String toString(Path p) {
 		StringBuilder sb = new StringBuilder();
 		Iterator<Path> it = p.iterator();
@@ -150,7 +184,7 @@ public class FileDescLoader {
 		}
 	}
 
-	public static class IndexedHash {
+	private static class IndexedHash {
 		public int i;
 		public Hash h;
 

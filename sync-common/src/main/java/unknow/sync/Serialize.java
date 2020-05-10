@@ -19,6 +19,11 @@ import unknow.sync.proto.StartAppend;
 import unknow.sync.proto.pojo.Done;
 import unknow.sync.proto.pojo.FileDesc;
 
+/**
+ * serialization utils
+ * 
+ * @author unknow
+ */
 public class Serialize {
 	private static final BinaryFormat format;
 	static {
@@ -43,10 +48,20 @@ public class Serialize {
 		}
 	}
 
+	/**
+	 * @param output the output
+	 * @param object the object
+	 * @throws IOException
+	 */
 	public static void write(OutputStream output, Object object) throws IOException {
 		format.write(object, output);
 	}
 
+	/**
+	 * @param input the input
+	 * @return the object
+	 * @throws IOException
+	 */
 	public static Object read(InputStream input) throws IOException {
 		return format.read(input);
 	}

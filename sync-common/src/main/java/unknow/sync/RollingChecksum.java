@@ -1,6 +1,7 @@
 package unknow.sync;
 
 /**
+ * compute rolling crc32
  * 
  * @author Unknow
  */
@@ -12,6 +13,11 @@ public class RollingChecksum {
 	private int decl;
 	private int nDecl;
 
+	/**
+	 * create new RollingChecksum
+	 * 
+	 * @param size size of the rolling bloc
+	 */
 	public RollingChecksum(int size) {
 		buf = new byte[size];
 		off = 0;
@@ -21,6 +27,12 @@ public class RollingChecksum {
 		nDecl = 32 - decl;
 	}
 
+	/**
+	 * append a byte to the rolling
+	 * 
+	 * @param b
+	 * @return the current crc32
+	 */
 	public int append(byte b) {
 		if (filled) {
 			int lb = buf[off] & 0xFF;
@@ -34,10 +46,18 @@ public class RollingChecksum {
 		return sum;
 	}
 
+	/**
+	 * the current crc32
+	 * 
+	 * @return crc32
+	 */
 	public int sum() {
 		return sum;
 	}
 
+	/**
+	 * @return a copy of the current bloc
+	 */
 	public byte[] buf() {
 		byte[] b = new byte[buf.length];
 		int i = off, j = 0;
@@ -48,10 +68,24 @@ public class RollingChecksum {
 		return b;
 	}
 
+	/**
+	 * compute the crc32 of this bloc
+	 * 
+	 * @param buf
+	 * @return the crc32
+	 */
 	public static int compute(byte[] buf) {
 		return compute(buf, 0, buf.length);
 	}
 
+	/**
+	 * compute the crc32 of the bloc
+	 * 
+	 * @param buf the buff
+	 * @param off the start
+	 * @param len the length
+	 * @return the crc32
+	 */
 	public static int compute(byte[] buf, int off, int len) {
 		int sum = 0;
 		for (int i = off; i < off + len; i++)
