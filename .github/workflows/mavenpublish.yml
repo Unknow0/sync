@@ -21,7 +21,7 @@ jobs:
       run: mvn -B versions:set -DnewVersion=${GITHUB_REF##*/}
 
     - name: build
-	  run: mvn -B javadoc:jar source:jar package
+      run: mvn -B javadoc:jar source:jar package
 
     - name: Publish to GitHub Packages Apache Maven
       run: mvn -B deploy
