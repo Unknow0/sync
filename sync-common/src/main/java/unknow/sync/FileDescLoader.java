@@ -184,10 +184,23 @@ public class FileDescLoader {
 		}
 	}
 
-	private static class IndexedHash {
+	/**
+	 * id -&gt; hash
+	 * 
+	 * @author unknow
+	 */
+	public static class IndexedHash {
+		/** the id */
 		public int i;
+		/** the hash */
 		public Hash h;
 
+		/**
+		 * create new IndexedHash
+		 * 
+		 * @param i the id
+		 * @param h the hash
+		 */
 		public IndexedHash(int i, Hash h) {
 			this.i = i;
 			this.h = h;
