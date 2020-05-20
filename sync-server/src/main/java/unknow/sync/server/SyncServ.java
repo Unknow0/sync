@@ -122,10 +122,10 @@ public class SyncServ {
 	}
 
 	public static void main(String arg[]) throws IOException, InterruptedException {
-		// Cfg cfg = Cfg.getSystem();
-		// if (arg.length != 0)
-		// cfg = new Cfg(arg[0]);
-		Cfg cfg = new ObjectMapper().readValue(new File("sync.cfg"), Cfg.class);
+		String file = "sync.cfg";
+		if (arg.length > 0)
+			file = arg[0];
+		Cfg cfg = new ObjectMapper().readValue(new File(file), Cfg.class);
 		System.out.println(cfg);
 		SyncServ serv = new SyncServ(cfg);
 		final SyncHandler handler = new SyncHandler(serv);

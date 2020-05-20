@@ -1,4 +1,4 @@
-name: Maven Package
+name: release
 
 on:
   push:
@@ -17,12 +17,23 @@ jobs:
       uses: actions/setup-java@v1
       with:
         java-version: 1.8
+    - uses: Unknow0/package@master
 
     - name: set version
-      run: mvn -B versions:set -DnewVersion=${GITHUB_REF##*/} -s .github/settings.xml
+      run: mvn -B versions:set -DnewVersion=${GITHUB_REF##*/}
 
     - name: build
-      run: mvn -B javadoc:jar source:jar package -s .github/settings.xml
+      run: mvn -B javadoc:jar source:jar package
 
     - name: Publish to GitHub Packages Apache Maven
-      run: mvn -B deploy -s .github/settings.xml
+      run: mvn -B deploy
+
+    - name: Build docker image
+      run: docker build -f Dockerfile -t docker.pkg.github.com/sync-server sync-server/target/
+
+    - name: Push docker image
+      run: |
+        cat ~/GH_TOKEN.txt | docker login docker.pkg.github.com -u Unknow0 --password-stdin
+        docker tag docker.pkg.github.com/sync-server docker.pkg.github.com/sync-server:${GITHUB_REF##*/}
+        docker push docker.pkg.github.com/sync-server
+        docker push docker.pkg.github.com/sync-server:${GITHUB_REF##*/}
