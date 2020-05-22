@@ -20,7 +20,7 @@
 							<goal>shade</goal>
 						</goals>
 						<configuration>
-							<finalName>sync-serverr</finalName>
+							<finalName>sync-server</finalName>
 							<minimizeJar>true</minimizeJar>
 							<createDependencyReducedPom>false</createDependencyReducedPom>
 							<shadedArtifactAttached>false</shadedArtifactAttached>
@@ -30,10 +30,7 @@
 								<filter>
 									<artifact>*</artifact>
 									<excludes>
-										<exlude>META-INF/*SF</exlude>
-										<exclude>META-INF/*.DSA</exclude>
-										<exclude>META-INF/*.RSA</exclude>
-										<exclude>META-INF/maven/**</exclude>
+										<exlude>META-INF/**</exlude>
 									</excludes>
 								</filter>
 							</filters>
