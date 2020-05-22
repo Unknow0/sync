@@ -44,12 +44,11 @@ jobs:
 
     - name: build
       run: mvn -B package
-    - name: Build docker image
-      run: docker build -f Dockerfile -t docker.pkg.github.com/unknow0/sync/server sync-server/target/
 
     - name: Push docker image
       run: |
         echo "${{secrets.GITHUB_TOKEN}}" | docker login docker.pkg.github.com -u Unknow0 --password-stdin
-        docker tag docker.pkg.github.com/unknow0/sync/server docker.pkg.github.com/unknow0/sync/server:${GITHUB_REF##*/}
+        docker build -f Dockerfile -t docker.pkg.github.com/unknow0/sync/server sync-server/target/
         docker push docker.pkg.github.com/unknow0/sync/server
+        docker tag docker.pkg.github.com/unknow0/sync/server docker.pkg.github.com/unknow0/sync/server:${GITHUB_REF##*/}
         docker push docker.pkg.github.com/unknow0/sync/server:${GITHUB_REF##*/}
