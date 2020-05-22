@@ -11,7 +11,7 @@
 		<dependency>
 			<groupId>unknow.common</groupId>
 			<artifactId>unknow-serialize</artifactId>
-			<version>1.0.1</version>
+			<version>1.0.0</version>
 		</dependency>
 	</dependencies>
 </project>
