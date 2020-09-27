@@ -11,7 +11,7 @@ public class CommitMojo extends SyncMojo {
 		try {
 			SyncClient sync = new SyncClient(host, port, baseDir);
 			sync.setListener(new SyncListener.Log());
-			sync.commit(login, password, project, pattern());
+			sync.commit(token, pattern());
 			sync.close();
 		} catch (Exception e) {
 			throw new MojoExecutionException("", e);

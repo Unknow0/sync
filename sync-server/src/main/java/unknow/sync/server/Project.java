@@ -2,79 +2,81 @@ package unknow.sync.server;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Iterator;
-import java.util.List;
+import java.nio.file.SimpleFileVisitor;
+import java.nio.file.attribute.BasicFileAttributes;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Set;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import unknow.sync.FileDescLoader;
-import unknow.sync.proto.pojo.Action;
+import unknow.sync.FileUtils;
 import unknow.sync.proto.pojo.FileDesc;
-import unknow.sync.proto.pojo.FileHash;
 import unknow.sync.proto.pojo.ProjectInfo;
+import unknow.sync.proto.pojo.ProjectInfo.FileInfo;
 
 public class Project {
 	private static final Logger log = LoggerFactory.getLogger(Project.class);
-	private List<FileDesc> files;
-	private String name;
-	private Cfg.P cfg;
+	private Map<String, FileDesc> files;
 	private Path root;
 
 	private ProjectInfo projectInfo;
 
-	public Project(String prj, Cfg.P cfg) throws IOException {
-		name = prj;
-		this.cfg = cfg;
+	private Set<String> tokens;
 
-		root = Paths.get(cfg.path);
+	public Project(Cfg cfg) throws IOException {
+		root = Paths.get(cfg.path).toAbsolutePath();
 
 		if (!Files.exists(root)) {
-			log.warn("root directory of '{}' not found creating '{}'", name, cfg.path);
+			log.warn("root directory not found creating '{}'", root);
 			Files.createDirectories(root);
 		}
-		if (Files.isDirectory(root)) {
-			files = new ArrayList<>();
-			projectInfo = new ProjectInfo(cfg.bloc_size, null);
-			FileDescLoader.load(files, root, projectInfo.blocSize, null);
+		if (!Files.isDirectory(root))
+			throw new FileNotFoundException("path '" + root + "' isn't a directory");
 
-			projectInfo.hashs = new FileHash[files.size()];
-			int i = 0;
-			for (FileDesc fd : files)
-				projectInfo.hashs[i++] = new FileHash(fd.name, fd.fileHash);
-		} else
-			throw new FileNotFoundException("project '" + name + "' path isn't a directory");
-	}
+		files = new HashMap<>();
+		projectInfo = new ProjectInfo(cfg.blocSize, null);
+		log.debug("loading filedesc");
 
-	public boolean asRight(String login, Action action) {
-		Set<String> set = cfg.rights.get(action);
-		return set != null && (set.contains("all") || set.contains(login));
+		Files.walkFileTree(root, new SimpleFileVisitor<Path>() {
+			@Override
+			public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
+				FileDesc t = FileUtils.loadFile(root, file, cfg.blocSize);
+				files.put(t.name, t);
+				return super.visitFile(file, attrs);
+			}
+		});
+		projectInfo.files = new FileInfo[files.size()];
+		int i = 0;
+		int c = 0;
+		for (FileDesc fd : files.values()) {
+			projectInfo.files[i++] = new FileInfo(fd.name, fd.size, fd.hash); // XXX
+			c += fd.blocs.length;
+		}
+
+		log.debug("done {} found ({} blocs)", files.size(), c);
+
+		tokens = cfg.tokens;
 	}
 
 	public int blocSize() {
 		return projectInfo.blocSize;
 	}
 
-	public String path() {
-		return cfg.path;
+	public Path file(String file) throws IOException {
+		Path f = root.resolve(file).toAbsolutePath();
+		if (!f.startsWith(root))
+			throw new IOException("try to get file outside root");
+		return f;
 	}
 
-	public FileDesc fileDesc(int i) {
-		synchronized (this) {
-			return files.get(i);
-		}
-	}
-
-	public List<FileDesc> fileDesc() {
-		synchronized (this) {// TODO change to readWriteLock
-			return files;
-		}
+	public FileDesc fileDesc(String name) {
+		return files.get(name);
 	}
 
 	public ProjectInfo projectInfo() {
@@ -83,46 +85,8 @@ public class Project {
 		}
 	}
 
-	public FileDesc reloadFile(String file) throws FileNotFoundException, IOException {
-		FileDesc fd = FileDescLoader.loadFile(root, Paths.get(file), projectInfo.blocSize);
-		synchronized (this) {
-			for (int i = 0; i < projectInfo.hashs.length; i++) {
-				if (fd.name.equals(projectInfo.hashs[i].name)) {
-					files.set(i, fd);
-					projectInfo.hashs[i] = new FileHash(fd.name, fd.fileHash);
-					return fd;
-				}
-			}
-			projectInfo.hashs = Arrays.copyOf(projectInfo.hashs, projectInfo.hashs.length + 1);
-			projectInfo.hashs[projectInfo.hashs.length - 1] = new FileHash(fd.name, fd.fileHash);
-			files.add(fd);
-		}
-		return fd;
+	public boolean asRight(String token) {
+		return tokens.contains(token);
 	}
 
-	public boolean delete(String file) {
-		synchronized (this) {
-			Iterator<FileDesc> it1 = files.iterator();
-			int i = 0;
-			while (it1.hasNext()) {
-				it1.next();
-				FileHash next = projectInfo.hashs[i++];
-				if (next.name.equals(file)) {
-					try {
-						Files.delete(root.resolve(file));
-
-						it1.remove();
-						projectInfo.hashs[i - 1] = projectInfo.hashs[projectInfo.hashs.length - 1];
-						projectInfo.hashs = Arrays.copyOf(projectInfo.hashs, projectInfo.hashs.length - 1);
-						return true;
-					} catch (IOException e) {
-						log.warn("failed to delete '" + file + "'", e);
-						return false;
-					}
-				}
-			}
-		}
-
-		return false;
-	}
 }

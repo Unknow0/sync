@@ -15,7 +15,7 @@ public class UpdateMojo extends SyncMojo {
 		try {
 			SyncClient sync = new SyncClient(host, port, baseDir);
 			sync.setListener(new SyncListener.Log());
-			sync.update(login, password, project, delete, pattern());
+			sync.update(token, delete, pattern());
 			sync.close();
 		} catch (Throwable e) {
 			throw new MojoExecutionException("", e);

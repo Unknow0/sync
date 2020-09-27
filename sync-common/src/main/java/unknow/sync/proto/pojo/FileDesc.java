@@ -3,14 +3,13 @@ package unknow.sync.proto.pojo;
 public class FileDesc {
 	public String name;
 	public Bloc[] blocs;
-	public Hash fileHash;
+	public long hash;
+	public long size;
 
 	public FileDesc() {
 	}
 
-	public FileDesc(String name, Bloc[] blocs, Hash fileHash) {
+	public FileDesc(String name) {
 		this.name = name;
-		this.blocs = blocs;
-		this.fileHash = fileHash;
 	}
-}
+}  
