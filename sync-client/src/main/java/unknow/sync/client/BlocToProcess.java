@@ -9,7 +9,7 @@ import java.util.List;
 
 import org.msgpack.core.MessageUnpacker;
 
-import unknow.sync.proto.pojo.Bloc;
+import unknow.sync.common.pojo.Bloc;
 
 /**
  * a bloc to process

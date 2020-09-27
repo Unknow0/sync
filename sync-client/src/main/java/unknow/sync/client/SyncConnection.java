@@ -12,8 +12,8 @@ import org.msgpack.core.MessageUnpacker;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import unknow.sync.Query;
-import unknow.sync.proto.pojo.ProjectInfo;
+import unknow.sync.common.Query;
+import unknow.sync.common.pojo.ProjectInfo;
 
 /**
  * @author unknow

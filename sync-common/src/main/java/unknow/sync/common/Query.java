@@ -1,7 +1,7 @@
 /**
  * 
  */
-package unknow.sync;
+package unknow.sync.common;
 
 /**
  * the Query id

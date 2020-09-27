@@ -29,6 +29,13 @@ public class SyncServ {
 	private final EventLoopGroup bossGroup = new NioEventLoopGroup();
 	private final EventLoopGroup workerGroup = new NioEventLoopGroup();
 
+	/**
+	 * create new SyncServ
+	 * 
+	 * @param cfg
+	 * @throws InterruptedException
+	 * @throws IOException
+	 */
 	public SyncServ(Cfg cfg) throws InterruptedException, IOException {
 		log.info("starting up ... ");
 		Project serv = new Project(cfg);
@@ -46,15 +53,28 @@ public class SyncServ {
 		f = b.bind(cfg.port).sync();
 	}
 
+	/**
+	 * wait for the server to be closed
+	 * 
+	 * @throws InterruptedException
+	 */
 	public void awaitClose() throws InterruptedException {
 		f.channel().closeFuture().sync();
 	}
 
+	/**
+	 * close the server (unlock all thread in {@link SyncServ#awaitClose()})
+	 */
 	public void close() {
 		workerGroup.shutdownGracefully();
 		bossGroup.shutdownGracefully();
 	}
 
+	/**
+	 * @param arg
+	 * @throws IOException
+	 * @throws InterruptedException
+	 */
 	public static void main(String arg[]) throws IOException, InterruptedException {
 		Cfg cfg = new Cfg();
 		OptionHandlerRegistry.getRegistry().registerHandler(Set.class, Cfg.SetOption.class);

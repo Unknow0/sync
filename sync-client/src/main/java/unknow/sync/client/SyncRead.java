@@ -15,22 +15,25 @@ import java.nio.file.Paths;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import io.netty.util.collection.IntObjectHashMap;
-import unknow.sync.FastHash;
-import unknow.sync.FileUtils;
-import unknow.sync.RollingChecksum;
-import unknow.sync.proto.pojo.Bloc;
-import unknow.sync.proto.pojo.FileDesc;
-import unknow.sync.proto.pojo.ProjectInfo;
-import unknow.sync.proto.pojo.ProjectInfo.FileInfo;
+import unknow.sync.common.FastHash;
+import unknow.sync.common.FileUtils;
+import unknow.sync.common.RollingChecksum;
+import unknow.sync.common.pojo.Bloc;
+import unknow.sync.common.pojo.FileDesc;
+import unknow.sync.common.pojo.FileInfo;
+import unknow.sync.common.pojo.ProjectInfo;
 
 /**
  * update local file
@@ -41,7 +44,7 @@ public class SyncRead {
 	private static final Logger log = LoggerFactory.getLogger(SyncRead.class);
 
 	private SyncConnection client;
-	private SyncListener.Log listener = new SyncListener.Log();
+	private SyncListener listener = new SyncListener.Log();
 
 	private Path root;
 	private Path tmp;
@@ -57,24 +60,37 @@ public class SyncRead {
 	/**
 	 * create new SyncRead
 	 * 
-	 * @param cli the option
+	 * @param root
+	 * @param tmp
+	 * @param host
+	 * @param port
 	 * @throws IOException
 	 */
-	public SyncRead(CLI cli) throws IOException {
-		root = Paths.get(cli.path);
-		tmp = Paths.get(cli.temp);
+	public SyncRead(String root, String tmp, String host, int port) throws IOException {
+		this.root = Paths.get(root);
+		this.tmp = Paths.get(tmp);
 
-		client = new SyncConnection(cli.host, cli.port);
+		client = new SyncConnection(host, port);
+	}
+
+	/**
+	 * @param listener the listener to use
+	 */
+	public void setListener(SyncListener listener) {
+		this.listener = listener;
 	}
 
 	/**
 	 * do the work
 	 * 
 	 * @param token token to use for login
+	 * @param regex limit the update/deletion
 	 * @throws IOException
 	 */
-	public void process(String token) throws IOException {
+	public void process(String token, Pattern regex) throws IOException {
 		listener.start();
+
+		Matcher m = regex == null ? null : regex.matcher("");
 
 		ProjectInfo info = client.login(token);
 		blocSize = info.blocSize;
@@ -83,6 +99,11 @@ public class SyncRead {
 		int l = files.length;
 		for (int i = 0; i < l; i++) {
 			FileInfo fileInfo = files[i];
+			if (m != null) {
+				m.reset(fileInfo.name);
+				if (!m.matches())
+					continue;
+			}
 			allFiles.add(fileInfo.name);
 			byteTotal += fileInfo.size;
 		}
@@ -93,14 +114,41 @@ public class SyncRead {
 			process(new ToProcess(root.resolve(fileInfo.name), fileInfo));
 		}
 
-		/** clean tmp dir */
-		Files.walkFileTree(tmp, new SimpleFileVisitor<Path>() {
+		Files.walkFileTree(root, new SimpleFileVisitor<Path>() {
 			@Override
-			public FileVisitResult postVisitDirectory(Path dir, IOException exc) throws IOException {
-				Files.delete(dir);
+			public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) throws IOException {
+				if (tmp.equals(dir))
+					return FileVisitResult.SKIP_SUBTREE;
+				if (m == null)
+					return FileVisitResult.CONTINUE;
+				m.reset(FileUtils.toString(root, dir));
+				return m.matches() || m.hitEnd() ? FileVisitResult.CONTINUE : FileVisitResult.SKIP_SUBTREE;
+			}
+
+			@Override
+			public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
+				String string = FileUtils.toString(root, file);
+				if (m != null) {
+					m.reset(string);
+					if (!m.matches())
+						return FileVisitResult.CONTINUE;
+				}
+				if (!allFiles.contains(string))
+					Files.delete(file);
 				return FileVisitResult.CONTINUE;
 			}
 		});
+
+		/** clean tmp dir */
+		if (Files.exists(tmp)) {
+			Files.walkFileTree(tmp, new SimpleFileVisitor<Path>() {
+				@Override
+				public FileVisitResult postVisitDirectory(Path dir, IOException exc) throws IOException {
+					Files.delete(dir);
+					return FileVisitResult.CONTINUE;
+				}
+			});
+		}
 
 		listener.done(byteDone);
 	}

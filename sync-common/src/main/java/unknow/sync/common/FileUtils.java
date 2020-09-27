@@ -1,7 +1,7 @@
 /**
  * 
  */
-package unknow.sync;
+package unknow.sync.common;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -12,9 +12,9 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 
-import unknow.sync.proto.pojo.Bloc;
-import unknow.sync.proto.pojo.FileDesc;
-import unknow.sync.proto.pojo.ProjectInfo.FileInfo;
+import unknow.sync.common.pojo.Bloc;
+import unknow.sync.common.pojo.FileDesc;
+import unknow.sync.common.pojo.FileInfo;
 
 /**
  * @author unknow
@@ -28,7 +28,7 @@ public class FileUtils {
 	 * @return the path to string
 	 */
 	public static String toString(Path root, Path p) {
-		Path relativize = p.toAbsolutePath().relativize(root);
+		Path relativize = root.relativize(p.toAbsolutePath());
 		StringBuilder sb = new StringBuilder();
 		Iterator<Path> it = relativize.iterator();
 		sb.append(it.next().toString());
@@ -80,23 +80,30 @@ public class FileUtils {
 		List<Bloc> list = new ArrayList<>();
 		long size = 0;
 		try (InputStream fis = Files.newInputStream(file)) {
-			byte[] buf = new byte[blocSize];
+			byte[] buf = new byte[Math.max(4096, blocSize)];
 			int l = 0;
-			while ((l = fis.read(buf, 0, blocSize)) > 0) {
-				int count;
-				while (l < blocSize && (count = fis.read(buf, l, blocSize - l)) > 0) // finish to read the bloc
-					l += count;
-
-				blocCheck.reset();
+			int o = 0;
+			while ((l = fis.read(buf, o, buf.length - o)) > 0) {
 				size += l;
-				fileCheck.update(buf, 0, l);
-
-				// padding
+				fileCheck.update(buf, o, l);
+				while (l > blocSize) {
+					blocCheck.reset();
+					blocCheck.update(buf, o, blocSize);
+					list.add(new Bloc(RollingChecksum.compute(buf, o, blocSize), blocCheck.getValue()));
+					l -= blocSize;
+					o += blocSize;
+				}
+				System.arraycopy(buf, o, buf, 0, l);
+				o = l;
+			}
+			// padding
+			if (o > 0) {
 				byte p = 0;
-				while (l < buf.length)
-					buf[l++] = ++p;
-				blocCheck.update(buf, 0, l);
-				list.add(new Bloc(RollingChecksum.compute(buf, 0, l), blocCheck.getValue()));
+				while (o < blocSize)
+					buf[o++] = ++p;
+				blocCheck.reset();
+				blocCheck.update(buf, 0, blocSize);
+				list.add(new Bloc(RollingChecksum.compute(buf, 0, blocSize), blocCheck.getValue()));
 			}
 		}
 		desc.hash = fileCheck.getValue();

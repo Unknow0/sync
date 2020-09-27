@@ -1,4 +1,4 @@
-package unknow.sync.proto.pojo;
+package unknow.sync.common.pojo;
 
 import java.io.IOException;
 

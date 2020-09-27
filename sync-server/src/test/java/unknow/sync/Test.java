@@ -3,7 +3,6 @@ package unknow.sync;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.lang.reflect.Array;
 import java.nio.ByteBuffer;
 import java.nio.channels.SeekableByteChannel;
 import java.nio.file.Files;
@@ -14,7 +13,6 @@ import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Random;
 
-import unknow.sync.client.CLI;
 import unknow.sync.client.SyncRead;
 import unknow.sync.server.Cfg;
 import unknow.sync.server.SyncServ;
@@ -32,9 +30,13 @@ public class Test {
 
 	private static final Random rand = new Random();
 
-	private static SyncServ srv;
 	private static int size = 4096 + rand.nextInt(Short.MAX_VALUE);
 
+	/**
+	 * @param arg
+	 * @throws InterruptedException
+	 * @throws IOException
+	 */
 	public static void main(String[] arg) throws InterruptedException, IOException {
 		System.out.println("file size: " + size);
 		genFiles(SRV_FILE);
@@ -45,35 +47,36 @@ public class Test {
 		cfg.path = SRV.toString();
 		cfg.port = 7777;
 		cfg.tokens = new HashSet<>(Arrays.asList("anonymous"));
-		srv = new SyncServ(cfg);
+		new SyncServ(cfg);
 
-		CLI cli = new CLI();
-		cli.host = "127.0.0.1";
-		cli.port = 7777;
-		cli.path = CLIENT.toString();
+		SyncRead syncRead = new SyncRead(CLIENT.toString(), "temp", "127.0.0.1", 7777);
 
-		SyncRead syncRead = new SyncRead(cli);
-
-		syncRead.process("anonymous");
+		syncRead.process("anonymous", null);
 		checkFiles("full download");
 
 		changeFile(CLIENT_FILE, 1, 10);
-		syncRead.process("anonymous");
+		syncRead.process("anonymous", null);
 		checkFiles("first bloc changed");
 
 		changeFile(CLIENT_FILE, size - 50, 10);
-		syncRead.process("anonymous");
+		syncRead.process("anonymous", null);
 		checkFiles("last bloc changed");
 
 		changeFile(CLIENT_FILE, cfg.blocSize + 20 + rand.nextInt(size - cfg.blocSize * 2), 20);
-		syncRead.process("anonymous");
+		syncRead.process("anonymous", null);
 		checkFiles("middle bloc changed");
 
 		genFiles(CLIENT_FILE);
-		syncRead.process("anonymous");
+		syncRead.process("anonymous", null);
 		checkFiles("full file changed");
 	}
 
+	/**
+	 * generate a random file
+	 * 
+	 * @param f
+	 * @throws IOException
+	 */
 	public static void genFiles(Path f) throws IOException {
 		Files.createDirectories(f.getParent());
 		try (OutputStream out = Files.newOutputStream(f, StandardOpenOption.WRITE, StandardOpenOption.CREATE)) {
@@ -84,6 +87,14 @@ public class Test {
 		}
 	}
 
+	/**
+	 * randomize data in file at off
+	 * 
+	 * @param f
+	 * @param off
+	 * @param len
+	 * @throws IOException
+	 */
 	public static void changeFile(Path f, int off, int len) throws IOException {
 		try (SeekableByteChannel out = Files.newByteChannel(f, StandardOpenOption.WRITE)) {
 			out.position(off);
@@ -95,6 +106,12 @@ public class Test {
 		}
 	}
 
+	/**
+	 * check if srv & client file have the same content
+	 * 
+	 * @param message
+	 * @throws IOException
+	 */
 	public static void checkFiles(String message) throws IOException {
 		try (InputStream is1 = Files.newInputStream(SRV_FILE); InputStream is2 = Files.newInputStream(CLIENT_FILE)) {
 			byte[] b1 = new byte[4096];
@@ -119,6 +136,12 @@ public class Test {
 		}
 	}
 
+	/**
+	 * @param b
+	 * @param o
+	 * @param l
+	 * @return remaining data
+	 */
 	public static int compact(byte[] b, int o, int l) {
 		if (o == l)
 			return 0;

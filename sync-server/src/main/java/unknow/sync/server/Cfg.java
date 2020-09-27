@@ -11,19 +11,31 @@ import org.kohsuke.args4j.spi.OptionHandler;
 import org.kohsuke.args4j.spi.Parameters;
 import org.kohsuke.args4j.spi.Setter;
 
+/**
+ * server config
+ * 
+ * @author unknow
+ */
 public class Cfg {
+	/** server port */
 	@Option(name = "--port", aliases = "-p", required = true, usage = "Set the port to use")
 	public int port;
 
+	/** data path */
 	@Option(name = "--data", aliases = "-d", required = true, usage = "Set the root of all data")
 	public String path;
 
+	/** bloc size */
 	@Option(name = "--bloc-size", aliases = "-bs", required = true, usage = "Set the size of the bloc")
 	public int blocSize;
 
+	/** allowed token */
 	@Option(name = "--tokens", usage = "Set read only token")
 	public Set<String> tokens = new HashSet<>();
 
+	/**
+	 * Option handler for set
+	 */
 	public static class SetOption extends OptionHandler<Set<String>> {
 		/**
 		 * create new SetOption

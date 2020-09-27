@@ -1,4 +1,4 @@
-package unknow.sync;
+package unknow.sync.common;
 
 /**
  * compute rolling crc32

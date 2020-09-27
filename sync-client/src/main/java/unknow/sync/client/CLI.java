@@ -54,7 +54,7 @@ public class CLI {
 			System.exit(1);
 		}
 		try {
-			new SyncRead(cfg).process(cfg.token);
+			new SyncRead(cfg.path, cfg.temp, cfg.host, cfg.port).process(cfg.token, cfg.regex);
 		} catch (Exception e) {
 			log.error("", e);
 		} finally {

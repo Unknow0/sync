@@ -17,26 +17,32 @@ import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufInputStream;
 import io.netty.buffer.ByteBufOutputStream;
 import io.netty.buffer.Unpooled;
-import io.netty.channel.Channel;
 import io.netty.channel.ChannelHandlerAdapter;
 import io.netty.channel.ChannelHandlerContext;
-import unknow.sync.Query;
-import unknow.sync.proto.pojo.Bloc;
-import unknow.sync.proto.pojo.FileDesc;
-import unknow.sync.proto.pojo.ProjectInfo;
+import unknow.sync.common.Query;
+import unknow.sync.common.pojo.Bloc;
+import unknow.sync.common.pojo.FileDesc;
+import unknow.sync.common.pojo.ProjectInfo;
 
+/**
+ * handle sync request
+ * 
+ * @author unknow
+ */
 public class SyncHandler extends ChannelHandlerAdapter {
 	private static final Logger log = LoggerFactory.getLogger(SyncHandler.class);
 	private static final Query[] QUERY = Query.values();
 
-	private Project serv;
 	private boolean logged = false;
 
 	private final EnumMap<Query, QueryHandler> handlers = new EnumMap<>(Query.class);
 
+	/**
+	 * create new SyncHandler
+	 * 
+	 * @param serv
+	 */
 	public SyncHandler(Project serv) {
-		this.serv = serv;
-
 		handlers.put(Query.LOGIN, (u, ctx) -> {
 			String token = u.unpackString();
 			log.trace("	({}, {})", token);
@@ -66,7 +72,7 @@ public class SyncHandler extends ChannelHandlerAdapter {
 			if (!f.isFile())
 				throw new IOException("invalid file");
 
-			new SendFile(ctx.channel(), f, off).start();
+			new SendFile(ctx.channel(), f, off);
 		});
 
 		handlers.put(Query.FILEBLOC, (u, ctx) -> {
@@ -152,46 +158,5 @@ public class SyncHandler extends ChannelHandlerAdapter {
 
 	private interface QueryHandler {
 		void handle(MessageUnpacker u, ChannelHandlerContext ctx) throws IOException;
-	}
-
-	private static class SendFile extends Thread {
-		private Channel ctx;
-		private File file;
-		private long off;
-
-		/**
-		 * create new SendFile
-		 * 
-		 * @param ctx
-		 * @param file
-		 * @param off
-		 */
-		public SendFile(Channel ctx, File file, long off) {
-			super();
-			this.ctx = ctx;
-			this.file = file;
-			this.off = off;
-		}
-
-		@Override
-		public void run() {
-			MessageBufferPacker p = MessagePack.newDefaultBufferPacker();
-
-			try (RandomAccessFile ram = new RandomAccessFile(file, "r")) {
-				byte[] buf = new byte[131070]; // send bloc of 128K
-				ram.seek(off);
-				int l;
-				while ((l = ram.read(buf)) > -1) {
-					p.packBinaryHeader(l);
-					p.addPayload(buf, 0, l);
-					p.flush();
-					ctx.writeAndFlush(Unpooled.wrappedBuffer(p.toByteArray())).awaitUninterruptibly();
-					p.clear();
-				}
-				p.packNil();
-				ctx.writeAndFlush(Unpooled.wrappedBuffer(p.toByteArray()));
-			} catch (IOException e) {
-			}
-		}
 	}
 }

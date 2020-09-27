@@ -1,10 +1,7 @@
 /**
  * 
  */
-package unknow.sync;
-
-import java.util.Arrays;
-import java.util.Random;
+package unknow.sync.common;
 
 /**
  * @author unknow
@@ -14,6 +11,9 @@ public class FastHash {
 	private long r = 0;
 	private int rem = 0;
 
+	/**
+	 * create new FastHash
+	 */
 	public FastHash() {
 		h = 0xCAFEBABE;
 	}
@@ -25,10 +25,22 @@ public class FastHash {
 		return h;
 	}
 
+	/**
+	 * same as {@code update(b, 0, b.length)}
+	 * 
+	 * @param b
+	 */
 	public void update(byte[] b) {
 		update(b, 0, b.length);
 	}
 
+	/**
+	 * update the hash with new data
+	 * 
+	 * @param b
+	 * @param off
+	 * @param len
+	 */
 	public void update(byte[] b, int off, int len) {
 		if (rem > 0) {
 			rem = 8 - rem;
@@ -75,11 +87,17 @@ public class FastHash {
 			r |= ((long) b[off++] & 0xFF) << 48;
 	}
 
+	/**
+	 * reset the hash
+	 */
 	public void reset() {
 		rem = 0;
 		h = 0xCAFEBABE;
 	}
 
+	/**
+	 * @return the current hash value
+	 */
 	public long getValue() {
 		long value = h;
 		if (rem > 0) { // add remaining value
@@ -92,41 +110,5 @@ public class FastHash {
 	private void update(long v) {
 		h ^= mix(v);
 		h *= 0x880355f21e6d1965L;
-	}
-
-	public static void main(String[] arg) throws Exception {
-
-		final int CHECKS = 1000000;
-		final int MAX_LENGTH = 1 << 12;
-
-		Random random = new Random();
-		long[] checksum = new long[CHECKS];
-		int len, i, j;
-
-		FastHash fastHash = new FastHash();
-		for (len = 1; len < MAX_LENGTH; len <<= 1) {
-			int id = 0;
-			long collisions = 0;
-			long ref = CHECKS / 2 * (CHECKS + 1);
-			byte[] b = new byte[len];
-
-			for (i = 0; i < CHECKS; i++) {
-				fastHash.reset();
-				for (j = 0; j < len; j++)
-					b[j] = (byte) (random.nextInt(256) & 0xFF);
-				fastHash.update(b);
-				checksum[i] = fastHash.getValue();
-			}
-			Arrays.sort(checksum);
-			for (i = 1; i < CHECKS; i++) {
-				if (checksum[i] == checksum[i - 1]) {
-					id++;
-					collisions += id;
-				} else
-					id = 0;
-			}
-			collisions += id;
-			System.out.format("len=%6d, collisions=%9d(%f%%), effective bits=%f\n", len, collisions, 100.0 * collisions / ref, Math.log(ref / (double) collisions) / Math.log(2));
-		}
 	}
 }
