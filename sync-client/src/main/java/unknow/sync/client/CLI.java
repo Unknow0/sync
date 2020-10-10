@@ -5,8 +5,9 @@ import java.util.regex.Pattern;
 import org.kohsuke.args4j.CmdLineException;
 import org.kohsuke.args4j.CmdLineParser;
 import org.kohsuke.args4j.Option;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+
+import unknow.log.Log;
+import unknow.log.LogFactory;
 
 /**
  * the command line interface
@@ -14,7 +15,7 @@ import org.slf4j.LoggerFactory;
  * @author unknow
  */
 public class CLI {
-	private static final Logger log = LoggerFactory.getLogger(CLI.class);
+	private static final Log log = LogFactory.getLogger(CLI.class);
 
 	/** the server's host */
 	@Option(name = "--host", required = true, usage = "Set the server host to use")

@@ -1,7 +1,6 @@
 package unknow.sync.client;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import unknow.log.LogFactory;
 
 /**
  * Update listener
@@ -31,40 +30,12 @@ public interface SyncListener {
 	 * log all update
 	 */
 	public static class Log implements SyncListener {
-		private static final Logger log = LoggerFactory.getLogger(Log.class);
+		private static final unknow.log.Log log = LogFactory.getLogger(Log.class);
 
 		private long start;
 
-		private final Size done = new Size(0);
-		private final Size total = new Size(0);
-
-		private final Object elapsed = new Object() {
-			@Override
-			public String toString() {
-				double sec = (System.currentTimeMillis() - start) / 1000.;
-				// TODO time format
-				return String.format("%.3f sec", sec);
-			}
-		};
-		private final Object speed = new Object() {
-			@Override
-			public String toString() {
-				double sec = (System.currentTimeMillis() - start) / 1000.;
-				double s = done.s / sec;
-				if (s < 1024)
-					return s + " o/sec";
-				s = s / 1024.;
-				if (s < 1024)
-					return String.format("%.2f Ko/s", s);
-				s = s / 1024.;
-				if (s < 1024)
-					return String.format("%.2f Mo/s", s);
-				s = s / 1024.;
-				if (s < 1024)
-					return String.format("%.2f Go/s", s);
-				return String.format("%.2f To/s", s / 1024.);
-			}
-		};
+		private long done;
+		private long total;
 
 		@Override
 		public void start() {
@@ -74,46 +45,16 @@ public interface SyncListener {
 
 		@Override
 		public void update(long done, long total) {
-			this.done.s = done;
-			this.total.s = total;
-			log.info("in progress {} / {} in {} ({})", this.done, this.total, elapsed, speed);
+			this.done = done;
+			this.total = total;
+			long elapsed = System.currentTimeMillis() - start;
+			log.info("in progress {,size} / {,size} in {,duration} ({,size}/sec)", this.done, this.total, elapsed, done * 1000. / elapsed);
 		}
 
 		@Override
 		public void done(long total) {
-			this.total.s = total;
-			log.info("Done updating in {} ({})", elapsed, speed);
-		}
-	}
-
-	/** byte formating */
-	public static class Size {
-		/** value to format */
-		public long s;
-
-		/**
-		 * new Size
-		 * 
-		 * @param s the value
-		 */
-		public Size(long s) {
-			this.s = s;
-		}
-
-		@Override
-		public String toString() {
-			if (s < 1024)
-				return s + " o";
-			double d = s / 1024.;
-			if (d < 1024)
-				return String.format("%.2f Ko", d);
-			d = d / 1024.;
-			if (d < 1024)
-				return String.format("%.2f Mo", d);
-			d = d / 1024.;
-			if (d < 1024)
-				return String.format("%.2f Go", d);
-			return String.format("%.2f To", d / 1024.);
+			double elapsed = System.currentTimeMillis() - start;
+			log.info("Done updating in {,duration} ({,size}/sec)", elapsed, total * 1000. / elapsed);
 		}
 	}
 }

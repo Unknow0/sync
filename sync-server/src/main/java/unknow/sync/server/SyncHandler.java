@@ -10,8 +10,6 @@ import org.msgpack.core.MessageInsufficientBufferException;
 import org.msgpack.core.MessagePack;
 import org.msgpack.core.MessagePacker;
 import org.msgpack.core.MessageUnpacker;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufInputStream;
@@ -19,6 +17,8 @@ import io.netty.buffer.ByteBufOutputStream;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.ChannelHandlerAdapter;
 import io.netty.channel.ChannelHandlerContext;
+import unknow.log.Log;
+import unknow.log.LogFactory;
 import unknow.sync.common.Query;
 import unknow.sync.common.pojo.Bloc;
 import unknow.sync.common.pojo.FileDesc;
@@ -30,7 +30,7 @@ import unknow.sync.common.pojo.ProjectInfo;
  * @author unknow
  */
 public class SyncHandler extends ChannelHandlerAdapter {
-	private static final Logger log = LoggerFactory.getLogger(SyncHandler.class);
+	private static final Log log = LogFactory.getLogger(SyncHandler.class);
 	private static final Query[] QUERY = Query.values();
 
 	private boolean logged = false;
