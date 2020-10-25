@@ -86,7 +86,7 @@ public class Project {
 		if (!f.startsWith(root))
 			throw new IOException("try to get file outside root");
 		if (Files.exists(f))
-			throw new IOException("file does'nt exists");
+			throw new IOException("file '"+f+"' doesn't exists");
 		return f;
 	}
 
