@@ -298,7 +298,7 @@ public class SyncRead {
 			Bloc[] tmpBlocs = t.tmp.blocs;
 			while (off < tmpBlocs.length && tmpBlocs[off].equals(blocs[off]))
 				off++;
-			if (off == blocs.length && t.tmp.size == t.remote.size && t.tmp.hash == t.remote.hash) { // tmp if the full file already
+			if (off == blocs.length && t.tmp.size == t.remote.size && t.tmp.hash == t.remote.hash) { // tmp is the full file
 				byteDone += t.tmp.size;
 				moveTmp(t);
 				listener.update(byteDone, byteTotal);
@@ -309,7 +309,7 @@ public class SyncRead {
 			if (off > 0)
 				off--;
 
-			log.debug("found {} o in tmp", off);
+			log.debug("found {} bloc in tmp", off);
 			if (off > 0) {
 				long end = off * blocSize;
 				try (InputStream in = Files.newInputStream(t.localFile)) {
@@ -334,7 +334,7 @@ public class SyncRead {
 				if (!found.isEmpty()) { // bloc found in local file
 					long o = found.get(0);
 					for (Long f : found) {
-						if (f == last + blocSize) {
+						if (f == last) {
 							o = f;
 							break;
 						}
@@ -348,23 +348,13 @@ public class SyncRead {
 						out.write(buf, 0, l);
 						r -= l;
 						byteDone += l;
+						last += l;
 					}
 					listener.update(byteDone, byteTotal);
 				} else {
 					byte[] bloc = client.getBloc(t.remote.name, off);
-					StringBuilder sb = new StringBuilder();
-					for (int i = 0; i < bloc.length; i++) {
-						sb.append(Integer.toString(bloc[i] & 0xFF, 16));
-						if (i % 32 == 0) {
-							log.info("{}", sb);
-							sb.setLength(0);
-						} else if (i % 4 == 0)
-							sb.append(' ');
-					}
-					if (sb.length() > 0)
-						log.info("{}", sb);
-					md.update(bloc);
 					out.write(bloc);
+					md.update(bloc);
 					byteDone += bloc.length;
 					listener.update(byteDone, byteTotal);
 					last += bloc.length;
