@@ -45,4 +45,12 @@ public class Bloc {
 		packer.packInt(roll);
 		packer.packLong(hash);
 	}
+
+	@Override
+	public boolean equals(Object obj) {
+		if (!(obj instanceof Bloc))
+			return false;
+		Bloc b = (Bloc) obj;
+		return b.hash == hash && b.roll == roll;
+	}
 }

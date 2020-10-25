@@ -59,6 +59,7 @@ public class Project {
 				FileDesc t = FileUtils.loadFile(root, file, cfg.blocSize);
 				files.put(t.name, t);
 				size.set(size.get() + t.size);
+				log.debug("blocs found: {} {}", t.name, t.blocs.length);
 				return FileVisitResult.CONTINUE;
 			}
 		});
