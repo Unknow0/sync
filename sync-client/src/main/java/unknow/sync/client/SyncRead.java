@@ -67,8 +67,8 @@ public class SyncRead {
 	 * @throws IOException
 	 */
 	public SyncRead(String root, String tmp, String host, int port) throws IOException {
-		this.root = Paths.get(root);
-		this.tmp = Paths.get(tmp);
+		this.root = Paths.get(root).toAbsolutePath();
+		this.tmp = Paths.get(tmp).toAbsolutePath();
 
 		client = new SyncConnection(host, port);
 	}

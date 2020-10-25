@@ -30,7 +30,8 @@
 								<filter>
 									<artifact>*</artifact>
 									<excludes>
-										<exlude>META-INF/**</exlude>
+										<exlude>META-INF/maven/**</exlude>
+										<exlude>META-INF/versions/**</exlude>
 									</excludes>
 								</filter>
 							</filters>
@@ -51,6 +52,11 @@
 			<groupId>${project.groupId}</groupId>
 			<artifactId>sync-common</artifactId>
 			<version>${project.version}</version>
+		</dependency>
+		<dependency>
+			<groupId>org.slf4j</groupId>
+			<artifactId>slf4j-simple</artifactId>
+			<version>${slf4j.version}</version>
 		</dependency>
 
 		<dependency>
