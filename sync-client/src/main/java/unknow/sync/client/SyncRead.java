@@ -17,8 +17,10 @@ import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -26,7 +28,6 @@ import java.util.regex.Pattern;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import io.netty.util.collection.IntObjectHashMap;
 import unknow.sync.common.FastHash;
 import unknow.sync.common.FileUtils;
 import unknow.sync.common.RollingChecksum;
@@ -350,7 +351,7 @@ public class SyncRead {
 		RollingChecksum crc = new RollingChecksum(blocSize);
 		FastHash h = new FastHash();
 
-		IntObjectHashMap<List<BlocToProcess>> remote = new IntObjectHashMap<>();
+		Map<Integer, List<BlocToProcess>> remote = new HashMap<>();
 		for (int i = off; i < blocs.length; i++) {
 			BlocToProcess b = blocs[i];
 			List<BlocToProcess> list = remote.get(b.roll);
