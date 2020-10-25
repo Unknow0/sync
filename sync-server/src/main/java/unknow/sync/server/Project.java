@@ -66,7 +66,7 @@ public class Project {
 		projectInfo.files = new FileInfo[files.size()];
 		int i = 0;
 		for (FileDesc fd : files.values())
-			projectInfo.files[i++] = new FileInfo(fd.name, fd.size, fd.hash); // XXX
+			projectInfo.files[i++] = new FileInfo(fd.name, fd.size, fd.hash);
 
 		tokens = cfg.tokens;
 	}

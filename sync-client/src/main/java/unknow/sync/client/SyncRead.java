@@ -17,8 +17,10 @@ import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
+import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -85,7 +87,7 @@ public class SyncRead {
 	 * do the work
 	 * 
 	 * @param token token to use for login
-	 * @param regex limit the update/deletion
+	 * @param regex files to excludes
 	 * @throws IOException
 	 */
 	public void process(String token, Pattern regex) throws IOException {
@@ -102,8 +104,10 @@ public class SyncRead {
 			FileInfo fileInfo = files[i];
 			if (m != null) {
 				m.reset(fileInfo.name);
-				if (!m.matches())
+				if (m.matches()) {
+					log.warn("excluding '{}'", fileInfo.name);
 					continue;
+				}
 			}
 			allFiles.add(fileInfo.name);
 			byteTotal += fileInfo.size;
@@ -112,9 +116,11 @@ public class SyncRead {
 
 		for (int i = 0; i < l; i++) {
 			FileInfo fileInfo = files[i];
-			process(new ToProcess(root.resolve(fileInfo.name), fileInfo));
+			if (allFiles.contains(fileInfo.name))
+				process(new ToProcess(root.resolve(fileInfo.name).toAbsolutePath(), fileInfo));
 		}
 
+		log.debug("removing extra file");
 		Files.walkFileTree(root, new SimpleFileVisitor<Path>() {
 			@Override
 			public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) throws IOException {
@@ -123,7 +129,7 @@ public class SyncRead {
 				if (m == null)
 					return FileVisitResult.CONTINUE;
 				m.reset(FileUtils.toString(root, dir));
-				return m.matches() || m.hitEnd() ? FileVisitResult.CONTINUE : FileVisitResult.SKIP_SUBTREE;
+				return m.matches() ? FileVisitResult.SKIP_SUBTREE : FileVisitResult.CONTINUE;
 			}
 
 			@Override
@@ -131,7 +137,7 @@ public class SyncRead {
 				String string = FileUtils.toString(root, file);
 				if (m != null) {
 					m.reset(string);
-					if (!m.matches())
+					if (m.matches())
 						return FileVisitResult.CONTINUE;
 				}
 				if (!allFiles.contains(string))
@@ -140,12 +146,28 @@ public class SyncRead {
 			}
 		});
 
-		/** clean tmp dir */
 		if (Files.exists(tmp)) {
+			log.debug("cleanup tmp");
 			Files.walkFileTree(tmp, new SimpleFileVisitor<Path>() {
+				private Deque<Integer> saw = new LinkedList<>();
+
+				@Override
+				public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) throws IOException {
+					saw.addFirst(0);
+					return super.preVisitDirectory(dir, attrs);
+				}
+
+				@Override
+				public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
+					int i = saw.removeFirst();
+					saw.addFirst(i + 1);
+					return FileVisitResult.CONTINUE;
+				}
+
 				@Override
 				public FileVisitResult postVisitDirectory(Path dir, IOException exc) throws IOException {
-					Files.delete(dir);
+					if (0 == saw.removeFirst())
+						Files.delete(dir);
 					return FileVisitResult.CONTINUE;
 				}
 			});
@@ -173,6 +195,7 @@ public class SyncRead {
 	 * @throws IOException
 	 */
 	private void process(ToProcess t) throws IOException {
+		log.debug("processing '{}'", t.remote.name);
 		boolean exists = Files.exists(t.localFile);
 
 		// check local file first
@@ -221,6 +244,7 @@ public class SyncRead {
 	 * @throws IOException
 	 */
 	private void download(ToProcess t) throws IOException {
+		log.debug("downloading '{}'", t.remote.name);
 		md.reset();
 		OpenOption options = StandardOpenOption.CREATE;
 		long off = 0;
@@ -251,7 +275,7 @@ public class SyncRead {
 		if (digest != t.remote.hash) {
 			byteDone = before;
 			// TODO
-			log.warn("check failed");
+			log.warn("check failed for '{}'", t.remote.name);
 		} else
 			moveTmp(t);
 	}
@@ -263,6 +287,7 @@ public class SyncRead {
 	 * @throws IOException
 	 */
 	private void update(ToProcess t) throws IOException {
+		log.debug("updating '{}'", t.remote.name);
 		md.reset();
 		long before = byteDone;
 
@@ -284,13 +309,13 @@ public class SyncRead {
 			if (off > 0)
 				off--;
 
-			log.debug("found {} in tmp", off);
+			log.debug("found {} o in tmp", off);
 			if (off > 0) {
 				long end = off * blocSize;
 				try (InputStream in = Files.newInputStream(t.localFile)) {
 					int l = 0;
 					while (end > 0 && (l = in.read(buf)) > 0) {
-						md.update(buf, 0, (int) Math.min(l, end));
+						md.update(buf, 0, l);
 						end -= l;
 					}
 				}
@@ -327,6 +352,17 @@ public class SyncRead {
 					listener.update(byteDone, byteTotal);
 				} else {
 					byte[] bloc = client.getBloc(t.remote.name, off);
+					StringBuilder sb = new StringBuilder();
+					for (int i = 0; i < bloc.length; i++) {
+						sb.append(Integer.toString(bloc[i] & 0xFF, 16));
+						if (i % 32 == 0) {
+							log.info("{}", sb);
+							sb.setLength(0);
+						} else if (i % 4 == 0)
+							sb.append(' ');
+					}
+					if (sb.length() > 0)
+						log.info("{}", sb);
 					md.update(bloc);
 					out.write(bloc);
 					byteDone += bloc.length;
@@ -342,7 +378,7 @@ public class SyncRead {
 			listener.update(byteDone, byteTotal);
 
 			// TODO
-			log.warn("check failed");
+			log.warn("check failed for '{}'", t.remote.name);
 		} else
 			moveTmp(t);
 	}

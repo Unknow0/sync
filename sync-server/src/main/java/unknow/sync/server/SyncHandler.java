@@ -108,7 +108,7 @@ public class SyncHandler extends ChannelHandlerAdapter {
 			MessageBufferPacker p = MessagePack.newDefaultBufferPacker();
 			try (RandomAccessFile ram = new RandomAccessFile(f, "r")) {
 				int len = serv.blocSize();
-				byte[] b = new byte[len]; // send bloc of 128K
+				byte[] b = new byte[len];
 				ram.seek(off * len);
 				int n = 0;
 				do {
@@ -117,6 +117,21 @@ public class SyncHandler extends ChannelHandlerAdapter {
 						break;
 					n += count;
 				} while (n < len);
+
+				if (log.isTraceEnabled()) {
+					StringBuilder sb = new StringBuilder();
+					for (int i = 0; i < n;) {
+						System.out.format("%02x", b[i++] & 0xFF);
+						if (i % 32 == 0) {
+							log.trace("{}", sb);
+							sb.setLength(0);
+						} else if (i % 4 == 0)
+							sb.append(' ');
+					}
+					if (sb.length() > 0)
+						log.trace("{}", sb);
+				}
+
 				p.packBinaryHeader(n);
 				p.addPayload(b, 0, n);
 				ctx.writeAndFlush(Unpooled.wrappedBuffer(p.toByteArray()));

@@ -61,8 +61,8 @@ public class FastHash {
 					r |= ((long) b[off++] & 0xFF) << 56;
 			}
 			update(r);
+			len -= rem;
 		}
-		len -= rem;
 		rem = len & 7;
 		final long end = off + len;
 		final long endr = end - rem;
@@ -92,6 +92,7 @@ public class FastHash {
 	 */
 	public void reset() {
 		rem = 0;
+		r = 0;
 		h = 0xCAFEBABE;
 	}
 
