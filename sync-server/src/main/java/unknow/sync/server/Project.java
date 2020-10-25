@@ -85,8 +85,8 @@ public class Project {
 		Path f = root.resolve(file).toAbsolutePath();
 		if (!f.startsWith(root))
 			throw new IOException("try to get file outside root");
-		if (Files.exists(f))
-			throw new IOException("file '"+f+"' doesn't exists");
+		if (!Files.exists(f))
+			throw new IOException("file '" + f + "' doesn't exists");
 		return f;
 	}
 
