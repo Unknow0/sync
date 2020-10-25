@@ -9,9 +9,9 @@ import java.net.Socket;
 import org.msgpack.core.MessagePack;
 import org.msgpack.core.MessagePacker;
 import org.msgpack.core.MessageUnpacker;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-import unknow.log.Log;
-import unknow.log.LogFactory;
 import unknow.sync.common.Query;
 import unknow.sync.common.pojo.ProjectInfo;
 
@@ -19,7 +19,7 @@ import unknow.sync.common.pojo.ProjectInfo;
  * @author unknow
  */
 public class SyncConnection {
-	private static final Log log = LogFactory.getLogger(SyncConnection.class);
+	private static final Logger log = LoggerFactory.getLogger(SyncConnection.class);
 	private Socket socket;
 
 	private MessagePacker pack;

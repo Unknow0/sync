@@ -54,9 +54,9 @@
 			<version>5.0.0.Alpha2</version>
 		</dependency>
 		<dependency>
-			<groupId>unknow.log</groupId>
-			<artifactId>unknow-log</artifactId>
-			<version>[1.0.0,)</version>
+			<groupId>org.slf4j</groupId>
+			<artifactId>slf4j-api</artifactId>
+			<version>[1.7.16,)</version>
 		</dependency>
 		<dependency>
 			<groupId>org.msgpack</groupId>

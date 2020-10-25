@@ -13,8 +13,9 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
 
-import unknow.log.Log;
-import unknow.log.LogFactory;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import unknow.sync.common.FileUtils;
 import unknow.sync.common.pojo.FileDesc;
 import unknow.sync.common.pojo.FileInfo;
@@ -22,7 +23,7 @@ import unknow.sync.common.pojo.ProjectInfo;
 
 /** data for a project */
 public class Project {
-	private static final Log log = LogFactory.getLogger(Project.class);
+	private static final Logger log = LoggerFactory.getLogger(Project.class);
 	private Map<String, FileDesc> files;
 	private Path root;
 

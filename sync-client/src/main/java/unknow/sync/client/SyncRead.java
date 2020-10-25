@@ -23,9 +23,10 @@ import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import io.netty.util.collection.IntObjectHashMap;
-import unknow.log.Log;
-import unknow.log.LogFactory;
 import unknow.sync.common.FastHash;
 import unknow.sync.common.FileUtils;
 import unknow.sync.common.RollingChecksum;
@@ -40,7 +41,7 @@ import unknow.sync.common.pojo.ProjectInfo;
  * @author unknow
  */
 public class SyncRead {
-	private static final Log log = LogFactory.getLogger(SyncRead.class);
+	private static final Logger log = LoggerFactory.getLogger(SyncRead.class);
 
 	private SyncConnection client;
 	private SyncListener listener = new SyncListener.Log();

@@ -1,6 +1,7 @@
 package unknow.sync.client;
 
-import unknow.log.LogFactory;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Update listener
@@ -30,12 +31,34 @@ public interface SyncListener {
 	 * log all update
 	 */
 	public static class Log implements SyncListener {
-		private static final unknow.log.Log log = LogFactory.getLogger(Log.class);
+		private static final long[] DURATION = new long[] { 24 * 3600000, 3600000, 60000, 1000, 1 };
+		private static final String[] UNIT = new String[] { "d", "h", "m", "s", "ms" };
+
+		private static final Logger log = LoggerFactory.getLogger(Log.class);
 
 		private long start;
 
-		private long done;
-		private long total;
+		private final Size done = new Size();
+		private final Size total = new Size();
+
+		private final Object elapsed = new Object() {
+			@Override
+			public String toString() {
+				StringBuilder out = new StringBuilder();
+				long ms = System.currentTimeMillis() - start;
+				for (int i = 0; i < DURATION.length; i++) {
+					long d = DURATION[i];
+					if (ms > d) {
+						long v = ms / d;
+						out.append(Long.toString(v));
+						out.append(UNIT[i]);
+						ms -= v * d;
+					}
+				}
+				return out.toString();
+			}
+		};
+		private final Size speed = new Size();
 
 		@Override
 		public void start() {
@@ -45,16 +68,35 @@ public interface SyncListener {
 
 		@Override
 		public void update(long done, long total) {
-			this.done = done;
-			this.total = total;
-			long elapsed = System.currentTimeMillis() - start;
-			log.info("in progress {,size} / {,size} in {,duration} ({,size}/sec)", this.done, this.total, elapsed, done * 1000. / elapsed);
+			this.done.value = done;
+			this.total.value = total;
+
+			speed.value = total * 1000 / (System.currentTimeMillis() - start);
+			log.info("in progress {} / {} in {} ({}/sec)", this.done, this.total, elapsed, speed);
 		}
 
 		@Override
 		public void done(long total) {
-			double elapsed = System.currentTimeMillis() - start;
-			log.info("Done updating in {,duration} ({,size}/sec)", elapsed, total * 1000. / elapsed);
+			speed.value = total * 1000 / (System.currentTimeMillis() - start);
+			log.info("Done updating in {} ({}/sec)", elapsed, speed);
+		}
+	}
+
+	public static class Size {
+		private static final String[] UNITS = new String[] { " o", " Ko", "Mo", "Go", "To", "Eo" };
+
+		long value;
+
+		@Override
+		public String toString() {
+			double s = value;
+			int i = 0;
+			while (s > 1024 && i < UNITS.length) {
+				s /= 1024;
+				i++;
+			}
+
+			return String.format("%.2f %s", s, UNITS[i]);
 		}
 	}
 }
