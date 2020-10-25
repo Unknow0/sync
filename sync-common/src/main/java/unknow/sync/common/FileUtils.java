@@ -86,7 +86,7 @@ public class FileUtils {
 			while ((l = fis.read(buf, o, buf.length - o)) > 0) {
 				size += l;
 				fileCheck.update(buf, o, l);
-				while (l > blocSize) {
+				while (l >= blocSize) {
 					blocCheck.reset();
 					blocCheck.update(buf, o, blocSize);
 					list.add(new Bloc(RollingChecksum.compute(buf, o, blocSize), blocCheck.getValue()));
