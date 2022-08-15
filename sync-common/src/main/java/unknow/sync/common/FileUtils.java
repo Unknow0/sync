@@ -10,11 +10,10 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Iterator;
-import java.util.List;
 
-import unknow.sync.common.pojo.Bloc;
 import unknow.sync.common.pojo.FileDesc;
-import unknow.sync.common.pojo.FileInfo;
+import unknow.sync.proto.BlocInfo;
+import unknow.sync.proto.FileInfo;
 
 /**
  * @author unknow
@@ -58,7 +57,7 @@ public class FileUtils {
 				checksum.update(buf, 0, s);
 				l += s;
 			}
-			return new FileInfo(toString(root, file), l, checksum.getValue());
+			return FileInfo.newBuilder().setName(toString(root, file)).setSize(l).setHash(checksum.getValue()).build();
 		}
 	}
 
@@ -76,8 +75,7 @@ public class FileUtils {
 		FastHash fileCheck = new FastHash();
 		FastHash blocCheck = new FastHash();
 
-		FileDesc desc = new FileDesc(toString(root, file));
-		List<Bloc> list = new ArrayList<>();
+		ArrayList<BlocInfo> list = new ArrayList<>();
 		long size = 0;
 		try (InputStream fis = Files.newInputStream(file)) {
 			byte[] buf = new byte[Math.max(4096, blocSize)];
@@ -91,7 +89,7 @@ public class FileUtils {
 				while (l >= blocSize) {
 					blocCheck.reset();
 					blocCheck.update(buf, o, blocSize);
-					list.add(new Bloc(RollingChecksum.compute(buf, o, blocSize), blocCheck.getValue()));
+					list.add(BlocInfo.newBuilder().setRoll(RollingChecksum.compute(buf, o, blocSize)).setHash(blocCheck.getValue()).build());
 					l -= blocSize;
 					o += blocSize;
 				}
@@ -105,12 +103,10 @@ public class FileUtils {
 					buf[o++] = ++p;
 				blocCheck.reset();
 				blocCheck.update(buf, 0, blocSize);
-				list.add(new Bloc(RollingChecksum.compute(buf, 0, blocSize), blocCheck.getValue()));
+				list.add(BlocInfo.newBuilder().setRoll(RollingChecksum.compute(buf, 0, blocSize)).setHash(blocCheck.getValue()).build());
 			}
 		}
-		desc.hash = fileCheck.getValue();
-		desc.blocs = list.toArray(new Bloc[0]);
-		desc.size = size;
-		return desc;
+		list.trimToSize();
+		return new FileDesc(toString(root, file), list, fileCheck.getValue(), size);
 	}
 }

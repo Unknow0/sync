@@ -8,6 +8,10 @@
 	<artifactId>sync-common</artifactId>
 
 	<dependencies>
-
+		<dependency>
+			<groupId>${project.groupId}</groupId>
+			<artifactId>sync-api</artifactId>
+			<version>${project.version}</version>
+		</dependency>
 	</dependencies>
 </project>

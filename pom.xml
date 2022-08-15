@@ -26,6 +26,11 @@
 
 	<properties>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+
+		<maven.compiler.source>8</maven.compiler.source>
+		<maven.compiler.target>8</maven.compiler.target>
+
+		<protobuf.version>3.21.5</protobuf.version>
 		<slf4j.version>[1.7.16,)</slf4j.version>
 	</properties>
 
@@ -34,20 +39,9 @@
 		<module>sync-common</module>
 		<module>sync-server</module>
 		<!--module>sync-plugins</module-->
+		<module>sync-api</module>
 	</modules>
 
-	<build>
-		<plugins>
-			<plugin>
-				<artifactId>maven-compiler-plugin</artifactId>
-				<version>3.1</version>
-				<configuration>
-					<source>8</source>
-					<target>8</target>
-				</configuration>
-			</plugin>
-		</plugins>
-	</build>
 	<dependencies>
 		<dependency>
 			<groupId>org.slf4j</groupId>
@@ -61,14 +55,9 @@
 			<scope>test</scope>
 		</dependency>
 		<dependency>
-			<groupId>org.msgpack</groupId>
-			<artifactId>msgpack-core</artifactId>
-			<version>[0.8.20,)</version>
-		</dependency>
-		<dependency>
-			<groupId>args4j</groupId>
-			<artifactId>args4j</artifactId>
-			<version>[2.33,)</version>
+			<groupId>unknow.server</groupId>
+			<artifactId>unknow-protobuf</artifactId>
+			<version>0.0.1-SNAPSHOT</version>
 		</dependency>
 	</dependencies>
 </project>

@@ -26,6 +26,20 @@ public class FastHash {
 	}
 
 	/**
+	 * append one byte
+	 * 
+	 * @param b
+	 */
+	public void update(byte b) {
+		r |= (long) b & 0xFF << (8 * rem);
+		if (++rem == 8) {
+			update(r);
+			rem = 0;
+			r = 0;
+		}
+	}
+
+	/**
 	 * same as {@code update(b, 0, b.length)}
 	 * 
 	 * @param b
@@ -42,27 +56,13 @@ public class FastHash {
 	 * @param len
 	 */
 	public void update(byte[] b, int off, int len) {
-		if (rem > 0) {
-			rem = 8 - rem;
-			switch (rem) {
-				case 7:
-					r |= ((long) b[off++] & 0xFF) << 8;
-				case 6:
-					r |= ((long) b[off++] & 0xFF) << 16;
-				case 5:
-					r |= ((long) b[off++] & 0xFF) << 24;
-				case 4:
-					r |= ((long) b[off++] & 0xFF) << 32;
-				case 3:
-					r |= ((long) b[off++] & 0xFF) << 40;
-				case 2:
-					r |= ((long) b[off++] & 0xFF) << 48;
-				case 1:
-					r |= ((long) b[off++] & 0xFF) << 56;
-			}
-			update(r);
-			len -= rem;
-		}
+		if (len == 0)
+			return;
+		while (rem > 0 && len-- > 0)
+			update(b[off++]);
+		if (len == 0)
+			return;
+
 		rem = len & 7;
 		final long end = off + len;
 		final long endr = end - rem;
@@ -70,21 +70,8 @@ public class FastHash {
 		while (off < endr)
 			update((long) b[off++] & 0xFF | ((long) b[off++] & 0xFF) << 8 | ((long) b[off++] & 0xFF) << 16 | ((long) b[off++] & 0xFF) << 24 | ((long) b[off++] & 0xFF) << 32 | ((long) b[off++] & 0xFF) << 40 | ((long) b[off++] & 0xFF) << 48 | ((long) b[off++] & 0xFF) << 56);
 
-		r = 0;
-		if (off < end)
-			r |= (long) b[off++] & 0xFF;
-		if (off < end)
-			r |= ((long) b[off++] & 0xFF) << 8;
-		if (off < end)
-			r |= ((long) b[off++] & 0xFF) << 16;
-		if (off < end)
-			r |= ((long) b[off++] & 0xFF) << 24;
-		if (off < end)
-			r |= ((long) b[off++] & 0xFF) << 32;
-		if (off < end)
-			r |= ((long) b[off++] & 0xFF) << 40;
-		if (off < end)
-			r |= ((long) b[off++] & 0xFF) << 48;
+		while (off < end)
+			update(b[off++]);
 	}
 
 	/**

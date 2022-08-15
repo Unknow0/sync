@@ -30,13 +30,15 @@ import java.util.regex.Pattern;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.google.protobuf.ByteString;
+
 import unknow.sync.common.FastHash;
 import unknow.sync.common.FileUtils;
 import unknow.sync.common.RollingChecksum;
-import unknow.sync.common.pojo.Bloc;
 import unknow.sync.common.pojo.FileDesc;
-import unknow.sync.common.pojo.FileInfo;
-import unknow.sync.common.pojo.ProjectInfo;
+import unknow.sync.proto.BlocInfo;
+import unknow.sync.proto.FileInfo;
+import unknow.sync.proto.ProjectInfo;
 
 /**
  * update local file
@@ -96,28 +98,25 @@ public class SyncRead {
 		Matcher m = regex == null ? null : regex.matcher("");
 
 		ProjectInfo info = client.login(token);
-		blocSize = info.blocSize;
+		blocSize = info.getBlocSize();
 
-		FileInfo[] files = info.files;
-		int l = files.length;
-		for (int i = 0; i < l; i++) {
-			FileInfo fileInfo = files[i];
+		List<FileInfo> files = info.getFileList();
+		for (FileInfo fileInfo : files) {
 			if (m != null) {
-				m.reset(fileInfo.name);
+				m.reset(fileInfo.getName());
 				if (m.matches()) {
-					log.warn("excluding '{}'", fileInfo.name);
+					log.warn("excluding '{}'", fileInfo.getName());
 					continue;
 				}
 			}
-			allFiles.add(fileInfo.name);
-			byteTotal += fileInfo.size;
+			allFiles.add(fileInfo.getName());
+			byteTotal += fileInfo.getSize();
 		}
 		listener.update(byteDone, byteTotal);
 
-		for (int i = 0; i < l; i++) {
-			FileInfo fileInfo = files[i];
-			if (allFiles.contains(fileInfo.name))
-				process(new ToProcess(root.resolve(fileInfo.name).toAbsolutePath(), fileInfo));
+		for (FileInfo fileInfo : files) {
+			if (allFiles.contains(fileInfo.getName()))
+				process(new ToProcess(root.resolve(fileInfo.getName()).toAbsolutePath(), fileInfo));
 		}
 
 		log.debug("removing extra file");
@@ -195,26 +194,26 @@ public class SyncRead {
 	 * @throws IOException
 	 */
 	private void process(ToProcess t) throws IOException {
-		log.debug("processing '{}'", t.remote.name);
+		log.debug("processing '{}'", t.remote.getName());
 		boolean exists = Files.exists(t.localFile);
 
 		// check local file first
 		if (exists) {
 			FileInfo remote = t.remote;
 			t.local = FileUtils.fileInfo(root, t.localFile);
-			if (remote.hash == t.local.hash && remote.size == t.local.size) {
-				byteDone += t.remote.size;
+			if (remote.getHash() == t.local.getHash() && remote.getSize() == t.local.getSize()) {
+				byteDone += t.remote.getSize();
 				listener.update(byteDone, byteTotal);
 				return;
 			}
 		}
 
 		// if local file has changed load tmp file
-		t.tmpFile = tmp(t.remote.name);
+		t.tmpFile = tmp(t.remote.getName());
 		if (Files.exists(t.tmpFile)) {
 			try {
 				t.tmp = FileUtils.loadFile(tmp, t.tmpFile, blocSize);
-				if (t.tmp.size > t.remote.size)
+				if (t.tmp.size > t.remote.getSize())
 					t.tmp = null; // invalid temporary file
 			} catch (IOException e) {
 			}
@@ -244,7 +243,7 @@ public class SyncRead {
 	 * @throws IOException
 	 */
 	private void download(ToProcess t) throws IOException {
-		log.debug("downloading '{}'", t.remote.name);
+		log.debug("downloading '{}'", t.remote.getName());
 		md.reset();
 		OpenOption options = StandardOpenOption.CREATE;
 		long off = 0;
@@ -264,18 +263,28 @@ public class SyncRead {
 		}
 		long before = byteDone;
 		try (OutputStream fos = Files.newOutputStream(t.tmpFile, options)) {
-			client.getFile(t.remote.name, off, b -> {
-				byteDone += b.length;
-				fos.write(b);
-				md.update(b);
-				listener.update(byteDone, byteTotal);
-			});
+			OutputStream o = new OutputStream() {
+				@Override
+				public void write(byte[] b, int off, int len) throws IOException {
+					byteDone += len;
+					fos.write(b, off, len);
+					md.update(b, off, len);
+				}
+
+				@Override
+				public void write(int b) throws IOException {
+					byteDone++;
+					fos.write(b);
+					md.update((byte) b);
+				}
+			};
+			client.getFile(t.remote.getName(), off, o);
 		}
 		long digest = md.getValue();
-		if (digest != t.remote.hash) {
+		if (digest != t.remote.getHash()) {
 			byteDone = before;
 			// TODO
-			log.warn("check failed for '{}'", t.remote.name);
+			log.warn("check failed for '{}'", t.remote.getName());
 		} else
 			moveTmp(t);
 	}
@@ -287,24 +296,24 @@ public class SyncRead {
 	 * @throws IOException
 	 */
 	private void update(ToProcess t) throws IOException {
-		log.debug("updating '{}'", t.remote.name);
+		log.debug("updating '{}'", t.remote.getName());
 		md.reset();
 		long before = byteDone;
 
-		BlocToProcess[] blocs = client.fileBlocs(t.remote.name);
+		List<BlocInfo> blocs = client.fileBlocs(t.remote.getName());
 
 		int off = 0;
 		if (t.tmp != null) { // checking temporary file
-			Bloc[] tmpBlocs = t.tmp.blocs;
-			while (off < tmpBlocs.length && tmpBlocs[off].equals(blocs[off]))
+			List<BlocInfo> tmpBlocs = t.tmp.blocs;
+			while (off < tmpBlocs.size() && tmpBlocs.get(off).equals(blocs.get(off)))
 				off++;
-			if (off == blocs.length && t.tmp.size == t.remote.size && t.tmp.hash == t.remote.hash) { // tmp is the full file
+			if (off == blocs.size() && t.tmp.size == t.remote.getSize() && t.tmp.hash == t.remote.getHash()) { // tmp is the full file
 				byteDone += t.tmp.size;
 				moveTmp(t);
 				listener.update(byteDone, byteTotal);
 				return;
 			}
-			if (off == tmpBlocs.length && t.tmp.size % blocSize != 0) // last bloc is a false positive
+			if (off == tmpBlocs.size() && t.tmp.size % blocSize != 0) // last bloc is a false positive
 				off--;
 			if (off > 0)
 				off--;
@@ -322,15 +331,32 @@ public class SyncRead {
 			}
 		}
 
-		try (RandomAccessFile out = new RandomAccessFile(t.tmpFile.toFile(), "rw"); RandomAccessFile local = new RandomAccessFile(t.localFile.toFile(), "r")) {
-			findBlocs(local, blocs, off, t.remote.size);
+		Map<BlocInfo, List<Long>> blocFound = new HashMap<>();
+		try (RandomAccessFile file = new RandomAccessFile(t.tmpFile.toFile(), "rw"); RandomAccessFile local = new RandomAccessFile(t.localFile.toFile(), "r")) {
+			findBlocs(local, blocs, blocFound, off, t.remote.getSize());
+
+			OutputStream out = new OutputStream() {
+				@Override
+				public void write(byte[] b, int off, int len) throws IOException {
+					byteDone += len;
+					file.write(b, off, len);
+					md.update(b, off, len);
+				}
+
+				@Override
+				public void write(int b) throws IOException {
+					byteDone++;
+					file.write(b);
+					md.update((byte) b);
+				}
+			};
 
 			// reconstruct file
 			if (off > 0)
-				out.seek(off * blocSize);
+				file.seek(off * blocSize);
 			long last = off * blocSize;
-			for (; off < blocs.length; off++) {
-				List<Long> found = blocs[off].found;
+			for (; off < blocs.size(); off++) {
+				List<Long> found = blocFound.get(blocs.get(off));
 				if (!found.isEmpty()) { // bloc found in local file
 					long o = found.get(0);
 					for (Long f : found) {
@@ -344,45 +370,41 @@ public class SyncRead {
 					int r = blocSize;
 					int l;
 					while (r > 0 && (l = local.read(buf, 0, Math.min(buf.length, r))) > 0) {
-						md.update(buf, 0, l);
 						out.write(buf, 0, l);
 						r -= l;
-						byteDone += l;
 						last += l;
 					}
 					listener.update(byteDone, byteTotal);
 				} else {
-					byte[] bloc = client.getBloc(t.remote.name, off);
-					out.write(bloc);
-					md.update(bloc);
-					byteDone += bloc.length;
+					ByteString bloc = client.getBloc(t.remote.getName(), off);
+					bloc.writeTo(out);
 					listener.update(byteDone, byteTotal);
-					last += bloc.length;
+					last += bloc.size();
 				}
 			}
 		}
 
 		long digest = md.getValue();
-		if (digest != t.remote.hash) {
+		if (digest != t.remote.getHash()) {
 			byteDone = before;
 			listener.update(byteDone, byteTotal);
 
 			// TODO
-			log.warn("check failed for '{}'", t.remote.name);
+			log.warn("check failed for '{}'", t.remote.getName());
 		} else
 			moveTmp(t);
 	}
 
-	private void findBlocs(RandomAccessFile local, BlocToProcess[] blocs, int off, long size) throws IOException {
+	private void findBlocs(RandomAccessFile local, List<BlocInfo> blocs, Map<BlocInfo, List<Long>> blocFound, int off, long size) throws IOException {
 		RollingChecksum crc = new RollingChecksum(blocSize);
 		FastHash h = new FastHash();
 
-		Map<Integer, List<BlocToProcess>> remote = new HashMap<>();
-		for (int i = off; i < blocs.length; i++) {
-			BlocToProcess b = blocs[i];
-			List<BlocToProcess> list = remote.get(b.roll);
+		Map<Integer, List<BlocInfo>> remote = new HashMap<>();
+		for (int i = off; i < blocs.size(); i++) {
+			BlocInfo b = blocs.get(i);
+			List<BlocInfo> list = remote.get(b.getRoll());
 			if (list == null)
-				remote.put(b.roll, list = new ArrayList<>());
+				remote.put(b.getRoll(), list = new ArrayList<>());
 			list.add(b);
 		}
 
@@ -391,33 +413,40 @@ public class SyncRead {
 		while ((l = local.read(buf)) > 0) {
 			for (int i = 0; i < l; i++) {
 				int roll = crc.append(buf[i]);
-				List<BlocToProcess> list = remote.get(roll);
+				List<BlocInfo> list = remote.get(roll);
 				if (list == null)
 					continue;
 				h.reset();
 				h.update(crc.buf());
 				long value = h.getValue();
 				long o = local.getFilePointer() - l + i + 1 - blocSize;
-				for (BlocToProcess b : list) {
-					if (b.hash == value)
-						b.found.add(o);
+				for (BlocInfo b : list) {
+					if (b.getHash() == value)
+						add(blocFound, b, o);
 				}
 			}
 		}
 		// add padding to find last bloc
-		BlocToProcess lastBloc = blocs[blocs.length - 1];
+		BlocInfo lastBloc = blocs.get(blocs.size() - 1);
 		byte b = 0;
 		int lastBlocSize = (int) (size % blocSize);
 		long o = local.getFilePointer() - lastBlocSize;
 		for (int i = 0; i < blocSize; i++) {
 			int roll = crc.append(++b);
-			if (roll != lastBloc.roll)
+			if (roll != lastBloc.getRoll())
 				continue;
 			h.reset();
 			h.update(crc.buf());
 			long value = h.getValue();
-			if (lastBloc.hash == value)
-				lastBloc.found.add(o);
+			if (lastBloc.getHash() == value)
+				add(blocFound, lastBloc, o);
 		}
+	}
+
+	public static <K, V> void add(Map<K, List<V>> map, K k, V v) {
+		List<V> list = map.get(k);
+		if (list == null)
+			map.put(k, list = new ArrayList<>());
+		list.add(v);
 	}
 }

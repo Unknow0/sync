@@ -4,26 +4,31 @@
 package unknow.sync.client;
 
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.net.Socket;
+import java.util.List;
 
-import org.msgpack.core.MessagePack;
-import org.msgpack.core.MessagePacker;
-import org.msgpack.core.MessageUnpacker;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import unknow.sync.common.Query;
-import unknow.sync.common.pojo.ProjectInfo;
+import com.google.protobuf.ByteString;
+
+import unknow.sync.proto.BlocInfo;
+import unknow.sync.proto.GetBloc;
+import unknow.sync.proto.GetFile;
+import unknow.sync.proto.ProjectInfo;
+import unknow.sync.proto.SyncMessage;
 
 /**
  * @author unknow
  */
 public class SyncConnection {
 	private static final Logger log = LoggerFactory.getLogger(SyncConnection.class);
-	private Socket socket;
 
-	private MessagePacker pack;
-	private MessageUnpacker unpack;
+	private final Socket socket;
+	private final InputStream in;
+	private final OutputStream out;
 
 	/**
 	 * create new SyncConnection
@@ -34,8 +39,8 @@ public class SyncConnection {
 	 */
 	public SyncConnection(String host, int port) throws IOException {
 		socket = new Socket(host, port);
-		unpack = MessagePack.newDefaultUnpacker(socket.getInputStream());
-		pack = MessagePack.newDefaultPacker(socket.getOutputStream());
+		in = socket.getInputStream();
+		out = socket.getOutputStream();
 	}
 
 	/**
@@ -46,12 +51,14 @@ public class SyncConnection {
 	 * @throws IOException
 	 */
 	public ProjectInfo login(String token) throws IOException {
-		pack.packInt(Query.LOGIN.ordinal());
-		pack.packString(token);
-		pack.flush();
+		SyncMessage.newBuilder().setToken(token).build().writeDelimitedTo(out);
+		out.flush();
 		log.info("login");
 
-		return new ProjectInfo(unpack);
+		SyncMessage.Builder b = SyncMessage.newBuilder();
+		if (!b.mergeDelimitedFrom(in) || !b.hasProject())
+			throw new IOException("wrong response");
+		return b.getProject();
 	}
 
 	/**
@@ -61,16 +68,14 @@ public class SyncConnection {
 	 * @return the file's bloc
 	 * @throws IOException
 	 */
-	public BlocToProcess[] fileBlocs(String file) throws IOException {
-		pack.packInt(Query.FILEBLOC.ordinal());
-		pack.packString(file);
-		pack.flush();
+	public List<BlocInfo> fileBlocs(String file) throws IOException {
+		SyncMessage.newBuilder().setFile(file).build().writeDelimitedTo(out);
+		out.flush();
 
-		int len = unpack.unpackArrayHeader();
-		BlocToProcess[] b = new BlocToProcess[len];
-		for (int i = 0; i < len; i++)
-			b[i] = new BlocToProcess(unpack);
-		return b;
+		SyncMessage.Builder b = SyncMessage.newBuilder();
+		if (!b.mergeDelimitedFrom(in) || !b.hasBloc())
+			throw new IOException("wrong response");
+		return b.getBloc().getBlocsList();
 	}
 
 	/**
@@ -81,18 +86,14 @@ public class SyncConnection {
 	 * @return the bloc's data
 	 * @throws IOException
 	 */
-	public byte[] getBloc(String file, int bloc) throws IOException {
-		pack.packInt(Query.GETBLOC.ordinal());
-		pack.packString(file);
-		pack.packInt(bloc);
+	public ByteString getBloc(String file, int bloc) throws IOException {
+		SyncMessage.newBuilder().setGetbloc(GetBloc.newBuilder().setFile(file).setBloc(bloc)).build().writeDelimitedTo(out);
+		out.flush();
 
-		pack.flush();
-
-		int len = unpack.unpackBinaryHeader();
-		byte[] buf = new byte[len];
-		unpack.readPayload(buf);
-
-		return buf;
+		SyncMessage.Builder b = SyncMessage.newBuilder();
+		if (!b.mergeDelimitedFrom(in) || !b.hasData())
+			throw new IOException("wrong response");
+		return b.getData();
 	}
 
 	/**
@@ -102,18 +103,19 @@ public class SyncConnection {
 	 * @param c
 	 * @throws IOException
 	 */
-	public void getFile(String file, long offset, DataHandle c) throws IOException {
+	public void getFile(String file, long offset, OutputStream c) throws IOException {
 		log.info("	getFile({}, {})", file, offset);
-		pack.packInt(Query.GETFILE.ordinal());
-		pack.packString(file);
-		pack.packLong(offset);
-		pack.flush();
+		SyncMessage.newBuilder().setGetfile(GetFile.newBuilder().setFile(file).setOffset(offset)).build().writeDelimitedTo(out);
+		out.flush();
 
-		while (!unpack.tryUnpackNil()) {
-			int len = unpack.unpackBinaryHeader();
-			byte[] buf = new byte[len];
-			unpack.readPayload(buf);
-			c.handle(buf);
+		SyncMessage.Builder b = SyncMessage.newBuilder();
+		while (true) {
+			if (!b.mergeDelimitedFrom(in) || !b.hasData())
+				throw new IOException("wrong response");
+			if (b.getData().size() == 0)
+				return;
+			b.getData().writeTo(c);
+			b.clearData();
 		}
 	}
 
@@ -123,8 +125,8 @@ public class SyncConnection {
 	 * @throws IOException
 	 */
 	public void close() throws IOException {
-		pack.close();
-		unpack.close();
+		in.close();
+		out.close();
 		socket.close();
 	}
 
@@ -136,6 +138,6 @@ public class SyncConnection {
 		 * @param b the data to handle
 		 * @throws IOException
 		 */
-		void handle(byte[] b) throws IOException;
+		void handle(ByteString b) throws IOException;
 	}
 }

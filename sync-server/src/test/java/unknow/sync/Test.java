@@ -9,13 +9,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
-import java.util.Arrays;
-import java.util.HashSet;
 import java.util.Random;
 
 import unknow.sync.client.SyncRead;
-import unknow.sync.server.Cfg;
-import unknow.sync.server.SyncServ;
 
 /**
  * @author unknow
@@ -42,12 +38,12 @@ public class Test {
 		genFiles(SRV_FILE);
 		Files.deleteIfExists(CLIENT_FILE);
 
-		Cfg cfg = new Cfg();
-		cfg.blocSize = 512;
-		cfg.path = SRV.toString();
-		cfg.port = 7777;
-		cfg.tokens = new HashSet<>(Arrays.asList("anonymous"));
-		new SyncServ(cfg);
+//		Cfg cfg = new Cfg();
+//		cfg.blocSize = 512;
+//		cfg.path = SRV.toString();
+//		cfg.port = 7777;
+//		cfg.tokens = new HashSet<>(Arrays.asList("anonymous"));
+//		new SyncServ(cfg);
 
 		SyncRead syncRead = new SyncRead(CLIENT.toString(), "temp", "127.0.0.1", 7777);
 
@@ -62,7 +58,7 @@ public class Test {
 		syncRead.process("anonymous", null);
 		checkFiles("last bloc changed");
 
-		changeFile(CLIENT_FILE, cfg.blocSize + 20 + rand.nextInt(size - cfg.blocSize * 2), 20);
+//		changeFile(CLIENT_FILE, cfg.blocSize + 20 + rand.nextInt(size - cfg.blocSize * 2), 20);
 		syncRead.process("anonymous", null);
 		checkFiles("middle bloc changed");
 

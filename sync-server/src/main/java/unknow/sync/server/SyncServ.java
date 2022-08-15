@@ -1,98 +1,156 @@
 package unknow.sync.server;
 
 import java.io.IOException;
+import java.io.InputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.HashSet;
 import java.util.Set;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
-import org.kohsuke.args4j.CmdLineException;
-import org.kohsuke.args4j.CmdLineParser;
-import org.kohsuke.args4j.OptionHandlerRegistry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import io.netty.bootstrap.ServerBootstrap;
-import io.netty.channel.ChannelFuture;
-import io.netty.channel.ChannelInitializer;
-import io.netty.channel.ChannelOption;
-import io.netty.channel.EventLoopGroup;
-import io.netty.channel.nio.NioEventLoopGroup;
-import io.netty.channel.socket.SocketChannel;
-import io.netty.channel.socket.nio.NioServerSocketChannel;
+import com.google.protobuf.ByteString;
+import com.google.protobuf.ByteString.Output;
+
+import picocli.CommandLine;
+import picocli.CommandLine.Option;
+import unknow.server.nio.Connection;
+import unknow.server.nio.Connection.Out;
+import unknow.server.nio.HandlerFactory;
+import unknow.server.nio.cli.NIOServerCli;
+import unknow.server.protobuf.ProtobufHandler;
+import unknow.sync.common.pojo.FileDesc;
+import unknow.sync.proto.BlocList;
+import unknow.sync.proto.GetBloc;
+import unknow.sync.proto.GetFile;
+import unknow.sync.proto.SyncMessage;
 
 /**
  * 
  * @author Unknow
  */
-public class SyncServ {
+public class SyncServ extends NIOServerCli {
 	private static final Logger log = LoggerFactory.getLogger(SyncServ.class);
 
-	private final ChannelFuture f;
-	private final EventLoopGroup bossGroup = new NioEventLoopGroup();
-	private final EventLoopGroup workerGroup = new NioEventLoopGroup();
+	private static final ExecutorService POOL = Executors.newCachedThreadPool();
 
-	/**
-	 * create new SyncServ
-	 * 
-	 * @param cfg
-	 * @throws InterruptedException
-	 * @throws IOException
-	 */
-	public SyncServ(Cfg cfg) throws InterruptedException, IOException {
-		log.info("starting up ... ");
-		Project serv = new Project(cfg);
+	/** data path */
+	@Option(names = { "--data", "-d" }, required = true, description = "Set the root of all data")
+	public String path;
 
-		ServerBootstrap b = new ServerBootstrap();
-		b.group(bossGroup, workerGroup).channel(NioServerSocketChannel.class).childHandler(new ChannelInitializer<SocketChannel>() { // (4)
-			@Override
-			public void initChannel(SocketChannel ch) throws Exception {
-				log.debug("new client {}", ch);
+	/** bloc size */
+	@Option(names = { "--bloc-size", "-bs" }, required = true, description = "Set the size of the bloc")
+	public int blocSize;
 
-				ch.pipeline().addLast(new SyncHandler(serv));
-			}
-		}).option(ChannelOption.SO_BACKLOG, 128).childOption(ChannelOption.SO_KEEPALIVE, true);
-		// Bind and start to accept incoming connections.
-		f = b.bind(cfg.port).sync();
-	}
+	/** allowed token */
+	@Option(names = "--tokens", description = "Set read only token")
+	public Set<String> tokens = new HashSet<>();
 
-	/**
-	 * wait for the server to be closed
-	 * 
-	 * @throws InterruptedException
-	 */
-	public void awaitClose() throws InterruptedException {
-		f.channel().closeFuture().sync();
-	}
+	private Project project;
 
-	/**
-	 * close the server (unlock all thread in {@link SyncServ#awaitClose()})
-	 */
-	public void close() {
-		workerGroup.shutdownGracefully();
-		bossGroup.shutdownGracefully();
-	}
-
-	/**
-	 * @param arg
-	 * @throws IOException
-	 * @throws InterruptedException
-	 */
-	public static void main(String arg[]) throws IOException, InterruptedException {
-		Cfg cfg = new Cfg();
-		OptionHandlerRegistry.getRegistry().registerHandler(Set.class, Cfg.SetOption.class);
-		CmdLineParser cmdLineParser = new CmdLineParser(cfg);
+	@Override
+	protected void init() {
 		try {
-			cmdLineParser.parseArgument(arg);
-		} catch (CmdLineException e) {
-			cmdLineParser.printUsage(System.out);
-			System.exit(1);
+			project = new Project(path, blocSize, tokens);
+		} catch (IOException e) {
+			throw new RuntimeException(e);
 		}
-		SyncServ syncServ = null;
-		try {
-			syncServ = new SyncServ(cfg);
-			log.info("done, waiting client");
-			syncServ.awaitClose();
-		} finally {
-			if (syncServ != null)
-				syncServ.close();
+		handler = new HandlerFactory() {
+
+			@Override
+			public unknow.server.nio.Handler create(Connection c) {
+				return new Handler(c);
+			}
+		};
+	}
+
+	public static void main(String[] arg) {
+		System.exit(new CommandLine(new SyncServ()).execute(arg));
+	}
+
+	private class Handler extends ProtobufHandler<SyncMessage> {
+		private boolean logged = false;
+		private final byte[] buf = new byte[4096];
+
+		private Handler(Connection c) {
+			super(SyncMessage.parser(), c);
+		}
+
+		@Override
+		protected void process(SyncMessage t) throws IOException {
+			Out out = co.getOut();
+			if (t.hasToken()) {
+				String token = t.getToken();
+				log.trace("	({}, {})", token);
+
+				if (!project.asRight(token)) {
+					out.close();
+					return;
+				}
+				logged = true;
+				project.projectInfo().writeDelimitedTo(out);
+				out.flush();
+				return;
+			}
+			if (!logged) {
+				out.close();
+				return;
+			}
+			if (t.hasGetfile()) {
+				GetFile getfile = t.getGetfile();
+				String file = getfile.getFile();
+				long off = getfile.getOffset();
+				log.trace("	({}, {})", file, off);
+
+				Path f = project.file(file);
+				if (f == null) {
+					out.close();
+					return;
+				}
+
+				POOL.submit(new SendFile(out, f, off));
+			} else if (t.hasFile()) {
+				String file = t.getFile();
+				log.trace("	({})", file);
+
+				FileDesc fileDesc = project.fileDesc(file);
+				if (fileDesc == null) {
+					out.close();
+					return;
+				}
+
+				SyncMessage.newBuilder().setBloc(BlocList.newBuilder().addAllBlocs(fileDesc.blocs)).build().writeDelimitedTo(out);
+				out.flush();
+			} else if (t.hasGetbloc()) {
+				GetBloc getbloc = t.getGetbloc();
+				String file = getbloc.getFile();
+				int off = getbloc.getBloc();
+				log.trace("	({}, {})", file, off);
+
+				Path f = project.file(file);
+				if (f == null) {
+					out.close();
+					return;
+				}
+
+				try (InputStream in = Files.newInputStream(f)) {
+					int len = project.blocSize();
+					in.skip(off * len);
+					Output b = ByteString.newOutput(len);
+					do {
+						int count = in.read(buf, 0, len);
+						if (count < 0)
+							break;
+						b.write(buf, 0, count);
+						len -= count;
+					} while (len > 0);
+					SyncMessage.newBuilder().setData(b.toByteString()).build().writeDelimitedTo(out);
+					out.flush();
+				}
+			}
 		}
 	}
 }

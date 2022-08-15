@@ -18,8 +18,8 @@ import org.slf4j.LoggerFactory;
 
 import unknow.sync.common.FileUtils;
 import unknow.sync.common.pojo.FileDesc;
-import unknow.sync.common.pojo.FileInfo;
-import unknow.sync.common.pojo.ProjectInfo;
+import unknow.sync.proto.FileInfo;
+import unknow.sync.proto.ProjectInfo;
 
 /** data for a project */
 public class Project {
@@ -34,11 +34,13 @@ public class Project {
 	/**
 	 * create new Project
 	 * 
-	 * @param cfg
+	 * @param path     root path of the project
+	 * @param blocSize blockSize
+	 * @param tokens   allowed token
 	 * @throws IOException
 	 */
-	public Project(Cfg cfg) throws IOException {
-		root = Paths.get(cfg.path).toAbsolutePath();
+	public Project(String path, int blocSize, Set<String> tokens) throws IOException {
+		root = Paths.get(path).toAbsolutePath();
 
 		if (!Files.exists(root)) {
 			log.warn("root directory not found creating '{}'", root);
@@ -48,7 +50,7 @@ public class Project {
 			throw new FileNotFoundException("path '" + root + "' isn't a directory");
 
 		files = new HashMap<>();
-		projectInfo = new ProjectInfo(cfg.blocSize, null);
+		ProjectInfo.Builder p = ProjectInfo.newBuilder().setBlocSize(blocSize);
 		log.debug("loading filedesc");
 
 		AtomicLong size = new AtomicLong();
@@ -56,25 +58,24 @@ public class Project {
 		Files.walkFileTree(root, new SimpleFileVisitor<Path>() {
 			@Override
 			public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
-				FileDesc t = FileUtils.loadFile(root, file, cfg.blocSize);
+				FileDesc t = FileUtils.loadFile(root, file, blocSize);
 				files.put(t.name, t);
 				size.set(size.get() + t.size);
-				log.debug("blocs found: {} {}", t.name, t.blocs.length);
+				log.debug("blocs found: {} {}", t.name, t.blocs.size());
 				return FileVisitResult.CONTINUE;
 			}
 		});
 		log.debug("done {} in {}", size, System.currentTimeMillis() - start);
-		projectInfo.files = new FileInfo[files.size()];
-		int i = 0;
 		for (FileDesc fd : files.values())
-			projectInfo.files[i++] = new FileInfo(fd.name, fd.size, fd.hash);
+			p.addFile(FileInfo.newBuilder().setName(fd.name).setSize(fd.size).setHash(fd.hash));
 
-		tokens = cfg.tokens;
+		this.projectInfo = p.build();
+		this.tokens = tokens;
 	}
 
 	/** @return the bloc size */
 	public int blocSize() {
-		return projectInfo.blocSize;
+		return projectInfo.getBlocSize();
 	}
 
 	/**
@@ -84,10 +85,8 @@ public class Project {
 	 */
 	public Path file(String file) throws IOException {
 		Path f = root.resolve(file).toAbsolutePath();
-		if (!f.startsWith(root))
-			throw new IOException("try to get file outside root");
-		if (!Files.exists(f))
-			throw new IOException("file '" + f + "' doesn't exists");
+		if (!f.startsWith(root) || !Files.isRegularFile(f) || !Files.isReadable(f))
+			return null;
 		return f;
 	}
 
@@ -101,9 +100,7 @@ public class Project {
 
 	/** @return the project info */
 	public ProjectInfo projectInfo() {
-		synchronized (this) {
-			return projectInfo;
-		}
+		return projectInfo;
 	}
 
 	/**

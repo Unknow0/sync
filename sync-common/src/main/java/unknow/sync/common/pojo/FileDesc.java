@@ -1,5 +1,9 @@
 package unknow.sync.common.pojo;
 
+import java.util.List;
+
+import unknow.sync.proto.BlocInfo;
+
 /**
  * hold off info of a file
  * 
@@ -7,20 +11,27 @@ package unknow.sync.common.pojo;
  */
 public class FileDesc {
 	/** name */
-	public String name;
+	public final String name;
 	/** bloc info */
-	public Bloc[] blocs;
+	public final List<BlocInfo> blocs;
 	/** hash of the file */
-	public long hash;
+	public final long hash;
 	/** size of the file */
-	public long size;
+	public final long size;
 
 	/**
 	 * create new FileDesc
 	 * 
 	 * @param name
+	 * @param blocs
+	 * @param hash
+	 * @param size
 	 */
-	public FileDesc(String name) {
+	public FileDesc(String name, List<BlocInfo> blocs, long hash, long size) {
+		super();
 		this.name = name;
+		this.blocs = blocs;
+		this.hash = hash;
+		this.size = size;
 	}
 }
