@@ -7,31 +7,31 @@
 	</parent>
 	<artifactId>sync-api</artifactId>
 
+
 	<build>
-		<extensions>
-			<extension>
-				<groupId>kr.motd.maven</groupId>
-				<artifactId>os-maven-plugin</artifactId>
-				<version>1.7.0</version>
-			</extension>
-		</extensions>
 		<plugins>
 			<plugin>
-				<groupId>com.github.os72</groupId>
-				<artifactId>protoc-jar-maven-plugin</artifactId>
-				<version>3.11.4</version>
+				<groupId>io.protostuff</groupId>
+				<artifactId>protostuff-maven-plugin</artifactId>
+				<version>1.8.0</version>
 				<executions>
 					<execution>
+						<id>generate-sources</id>
 						<phase>generate-sources</phase>
 						<goals>
-							<goal>run</goal>
+							<goal>compile</goal>
 						</goals>
 						<configuration>
-							<protocVersion>${protobuf.version}</protocVersion>
-							<type>java</type>
-							<outputOptions>lite</outputOptions>
-							<outputDirectory>src/main/java/</outputDirectory>
-							<cleanOutputFolder>true</cleanOutputFolder>
+							<protoModules>
+								<protoModule>
+									<source>src/main/proto</source>
+									<outputDir>target/generated-sources/proto</outputDir>
+									<output>java_bean</output>
+									<options>
+										<separate_schema>true</separate_schema>
+									</options>
+								</protoModule>
+							</protoModules>
 						</configuration>
 					</execution>
 				</executions>
@@ -41,9 +41,8 @@
 
 	<dependencies>
 		<dependency>
-			<groupId>com.google.protobuf</groupId>
-			<artifactId>protobuf-javalite</artifactId>
-			<version>${protobuf.version}</version>
+			<groupId>io.protostuff</groupId>
+			<artifactId>protostuff-core</artifactId>
 		</dependency>
 	</dependencies>
 </project>

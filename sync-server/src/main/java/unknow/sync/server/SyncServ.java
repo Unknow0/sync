@@ -4,26 +4,21 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Arrays;
 import java.util.HashSet;
-import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
+import org.apache.commons.cli.CommandLine;
+import org.apache.commons.cli.Option;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.google.protobuf.ByteString;
-import com.google.protobuf.ByteString.Output;
-
-import picocli.CommandLine;
-import picocli.CommandLine.Option;
-import unknow.server.nio.Connection;
-import unknow.server.nio.Connection.Out;
-import unknow.server.nio.HandlerFactory;
-import unknow.server.nio.cli.NIOServerCli;
-import unknow.server.protobuf.ProtobufHandler;
+import io.protostuff.ByteString;
+import unknow.server.nio.NIOServer;
+import unknow.server.nio.NIOServerBuilder;
+import unknow.server.protobuf.ProtoStuffConnection;
 import unknow.sync.common.pojo.FileDesc;
-import unknow.sync.proto.BlocList;
 import unknow.sync.proto.GetBloc;
 import unknow.sync.proto.GetFile;
 import unknow.sync.proto.SyncMessage;
@@ -32,125 +27,135 @@ import unknow.sync.proto.SyncMessage;
  * 
  * @author Unknow
  */
-public class SyncServ extends NIOServerCli {
+public class SyncServ extends NIOServerBuilder {
 	private static final Logger log = LoggerFactory.getLogger(SyncServ.class);
 
 	private static final ExecutorService POOL = Executors.newCachedThreadPool();
 
-	/** data path */
-	@Option(names = { "--data", "-d" }, required = true, description = "Set the root of all data")
-	public String path;
-
-	/** bloc size */
-	@Option(names = { "--bloc-size", "-bs" }, required = true, description = "Set the size of the bloc")
-	public int blocSize;
-
-	/** allowed token */
-	@Option(names = "--tokens", description = "Set read only token")
-	public Set<String> tokens = new HashSet<>();
-
-	private Project project;
+	private Opt addr;
+	private Opt path;
+	private Opt bs;
+	private Opt tokens;
 
 	@Override
-	protected void init() {
-		try {
-			project = new Project(path, blocSize, tokens);
-		} catch (IOException e) {
-			throw new RuntimeException(e);
-		}
-		handler = new HandlerFactory() {
-
-			@Override
-			public unknow.server.nio.Handler create(Connection c) {
-				return new Handler(c);
-			}
-		};
+	protected void beforeParse() {
+		addr = withOpt("addr").withCli(Option.builder("a").longOpt("addr").argName("port").desc("address to bind to").build()).withValue("54320");
+		path = withOpt("path").withCli(Option.builder("p").longOpt("path").argName("path").desc("folder with data to sync").build());
+		bs = withOpt("bs").withCli(Option.builder("b").longOpt("bs").argName("size").desc("block size to use").build()).withValue("1024");
+		tokens = withOpt("tokens").withCli(Option.builder().longOpt("tokens").hasArg().desc("read only tokens").build());
 	}
 
-	public static void main(String[] arg) {
-		System.exit(new CommandLine(new SyncServ()).execute(arg));
+	@Override
+	protected void process(NIOServer server, CommandLine cli) throws Exception {
+		Project p = new Project(path.value(cli), parseInt(cli, bs, 0), new HashSet<>(Arrays.asList(tokens.value(cli).split(","))));
+
+		server.bind(parseAddr(cli, addr, ""), () -> new ProtoCo(p));
 	}
 
-	private class Handler extends ProtobufHandler<SyncMessage> {
+	public static void main(String[] arg) throws Exception {
+		NIOServer server = new SyncServ().build(arg);
+
+		server.start();
+		server.await();
+	}
+
+	private static class ProtoCo extends ProtoStuffConnection<SyncMessage> {
+		private final Project project;
+		private final byte[] buf;
+
 		private boolean logged = false;
-		private final byte[] buf = new byte[4096];
 
-		private Handler(Connection c) {
-			super(SyncMessage.parser(), c);
+		public ProtoCo(Project p) {
+			super(SyncMessage.getSchema(), false);
+			this.project = p;
+			this.buf = new byte[project.blocSize()];
+		}
+
+		@Override
+		protected void onInit() {
+			super.onInit();
+			logged = false;
 		}
 
 		@Override
 		protected void process(SyncMessage t) throws IOException {
-			Out out = co.getOut();
-			if (t.hasToken()) {
-				String token = t.getToken();
-				log.trace("	({}, {})", token);
+			if (t.getToken() != null)
+				login(t.getToken());
 
-				if (!project.asRight(token)) {
-					out.close();
-					return;
-				}
-				logged = true;
-				project.projectInfo().writeDelimitedTo(out);
-				out.flush();
+			if (!logged) {
+				getOut().close();
 				return;
 			}
-			if (!logged) {
+			if (t.getInfo() != null)
+				getInfo(t.getInfo());
+			if (t.getFile() != null)
+				getFile(t.getFile());
+			if (t.getBloc() != null)
+				getBloc(t.getBloc());
+		}
+
+		private void login(String token) throws IOException {
+			log.trace("	login({})", token);
+			if (project.asRight(token)) {
+				logged = true;
+				writeMessage(project.projectInfo());
+			}
+		}
+
+		private void getInfo(String file) throws IOException {
+			log.trace("	getInfo({})", file);
+
+			FileDesc fileDesc = project.fileDesc(file);
+			if (fileDesc == null) {
 				out.close();
 				return;
 			}
-			if (t.hasGetfile()) {
-				GetFile getfile = t.getGetfile();
-				String file = getfile.getFile();
-				long off = getfile.getOffset();
-				log.trace("	({}, {})", file, off);
 
-				Path f = project.file(file);
-				if (f == null) {
-					out.close();
-					return;
-				}
+			SyncMessage m = new SyncMessage();
+			m.setBlocsList(fileDesc.blocs);
+			write(m);
+		}
 
-				POOL.submit(new SendFile(out, f, off));
-			} else if (t.hasFile()) {
-				String file = t.getFile();
-				log.trace("	({})", file);
+		private void getBloc(GetBloc bloc) throws IOException {
+			String file = bloc.getFile();
+			int off = bloc.getBloc();
+			log.trace("	getBloc({}, {})", file, off);
 
-				FileDesc fileDesc = project.fileDesc(file);
-				if (fileDesc == null) {
-					out.close();
-					return;
-				}
-
-				SyncMessage.newBuilder().setBloc(BlocList.newBuilder().addAllBlocs(fileDesc.blocs)).build().writeDelimitedTo(out);
-				out.flush();
-			} else if (t.hasGetbloc()) {
-				GetBloc getbloc = t.getGetbloc();
-				String file = getbloc.getFile();
-				int off = getbloc.getBloc();
-				log.trace("	({}, {})", file, off);
-
-				Path f = project.file(file);
-				if (f == null) {
-					out.close();
-					return;
-				}
-
-				try (InputStream in = Files.newInputStream(f)) {
-					int len = project.blocSize();
-					in.skip(off * len);
-					Output b = ByteString.newOutput(len);
-					do {
-						int count = in.read(buf, 0, len);
-						if (count < 0)
-							break;
-						b.write(buf, 0, count);
-						len -= count;
-					} while (len > 0);
-					SyncMessage.newBuilder().setData(b.toByteString()).build().writeDelimitedTo(out);
-					out.flush();
-				}
+			Path f = project.file(file);
+			if (f == null) {
+				out.close();
+				return;
 			}
+
+			try (InputStream in = Files.newInputStream(f)) {
+				int len = project.blocSize();
+				in.skip(off * len);
+				int o = 0;
+				do {
+					int count = in.read(buf, o, len);
+					if (count < 0)
+						break;
+					len -= count;
+					o += count;
+				} while (len > 0);
+				SyncMessage m = new SyncMessage();
+				m.setData(ByteString.copyFrom(buf, 0, o));
+				write(m);
+			}
+		}
+
+		private void getFile(GetFile getfile) throws IOException {
+			String file = getfile.getFile();
+			long off = getfile.getOffset();
+			log.trace("getFile	({}, {})", file, off);
+
+			Path f = project.file(file);
+			if (f == null) {
+				out.close();
+				return;
+			}
+
+			POOL.submit(new SendFile(out, f, off));
 		}
 	}
 }

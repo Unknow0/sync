@@ -1,0 +1,48 @@
+syntax = "proto2";
+
+option java_multiple_files = true;
+
+package unknow.sync.proto;
+
+message SyncMessage {
+	// login
+	optional string token = 1;
+	optional ProjectInfo project = 2;
+	
+	// get bloc info for a file
+	optional string info = 3;
+	repeated BlocInfo blocs = 4;
+	
+	// request bloc data
+	optional GetBloc bloc = 5;
+	// request file content
+	optional GetFile file = 7;
+	
+	optional bytes data = 6;
+}
+
+message ProjectInfo {
+	required uint32 blocSize = 1;
+	repeated FileInfo file = 2;
+}
+
+message FileInfo {
+	required string name = 1;
+	required uint64 size = 2;
+	required fixed64 hash = 3;
+}
+
+message BlocInfo {
+	required fixed32 roll = 1;
+	required fixed64 hash = 2;
+}
+
+message GetBloc {
+	required string file = 1;
+	required uint32 bloc = 2;
+}
+
+message GetFile {
+	required string file = 1;
+	required uint64 offset = 2;
+}

@@ -57,7 +57,7 @@ public class FileUtils {
 				checksum.update(buf, 0, s);
 				l += s;
 			}
-			return FileInfo.newBuilder().setName(toString(root, file)).setSize(l).setHash(checksum.getValue()).build();
+			return new FileInfo(toString(root, file), l, checksum.getValue());
 		}
 	}
 
@@ -89,7 +89,7 @@ public class FileUtils {
 				while (l >= blocSize) {
 					blocCheck.reset();
 					blocCheck.update(buf, o, blocSize);
-					list.add(BlocInfo.newBuilder().setRoll(RollingChecksum.compute(buf, o, blocSize)).setHash(blocCheck.getValue()).build());
+					list.add(new BlocInfo(RollingChecksum.compute(buf, o, blocSize), blocCheck.getValue()));
 					l -= blocSize;
 					o += blocSize;
 				}
@@ -103,7 +103,7 @@ public class FileUtils {
 					buf[o++] = ++p;
 				blocCheck.reset();
 				blocCheck.update(buf, 0, blocSize);
-				list.add(BlocInfo.newBuilder().setRoll(RollingChecksum.compute(buf, 0, blocSize)).setHash(blocCheck.getValue()).build());
+				list.add(new BlocInfo(RollingChecksum.compute(buf, 0, blocSize), blocCheck.getValue()));
 			}
 		}
 		list.trimToSize();

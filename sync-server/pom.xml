@@ -24,8 +24,7 @@
 							<minimizeJar>true</minimizeJar>
 							<createDependencyReducedPom>false</createDependencyReducedPom>
 							<shadedArtifactAttached>false</shadedArtifactAttached>
-							<artifactSet>
-							</artifactSet>
+							<artifactSet> </artifactSet>
 							<filters>
 								<filter>
 									<artifact>*</artifact>
@@ -53,11 +52,25 @@
 			<artifactId>sync-common</artifactId>
 			<version>${project.version}</version>
 		</dependency>
+
+		<dependency>
+			<groupId>org.slf4j</groupId>
+			<artifactId>slf4j-api</artifactId>
+		</dependency>
 		<dependency>
 			<groupId>org.slf4j</groupId>
 			<artifactId>slf4j-simple</artifactId>
-			<version>${slf4j.version}</version>
 		</dependency>
+
+		<dependency>
+			<groupId>unknow.server</groupId>
+			<artifactId>unknow-server-nio</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>unknow.server</groupId>
+			<artifactId>unknow-server-protostuff</artifactId>
+		</dependency>
+
 		<dependency>
 			<groupId>${project.groupId}</groupId>
 			<artifactId>sync-client</artifactId>

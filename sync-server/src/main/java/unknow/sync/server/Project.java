@@ -8,6 +8,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
@@ -50,7 +51,7 @@ public class Project {
 			throw new FileNotFoundException("path '" + root + "' isn't a directory");
 
 		files = new HashMap<>();
-		ProjectInfo.Builder p = ProjectInfo.newBuilder().setBlocSize(blocSize);
+		ArrayList<FileInfo> list = new ArrayList<>();
 		log.debug("loading filedesc");
 
 		AtomicLong size = new AtomicLong();
@@ -60,16 +61,16 @@ public class Project {
 			public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
 				FileDesc t = FileUtils.loadFile(root, file, blocSize);
 				files.put(t.name, t);
+				list.add(new FileInfo(t.name, t.size, t.hash));
 				size.set(size.get() + t.size);
 				log.debug("blocs found: {} {}", t.name, t.blocs.size());
 				return FileVisitResult.CONTINUE;
 			}
 		});
+		list.trimToSize();
 		log.debug("done {} in {}", size, System.currentTimeMillis() - start);
-		for (FileDesc fd : files.values())
-			p.addFile(FileInfo.newBuilder().setName(fd.name).setSize(fd.size).setHash(fd.hash));
-
-		this.projectInfo = p.build();
+		this.projectInfo = new ProjectInfo(blocSize);
+		this.projectInfo.setFileList(list);
 		this.tokens = tokens;
 	}
 

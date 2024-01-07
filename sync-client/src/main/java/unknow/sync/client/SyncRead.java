@@ -30,8 +30,7 @@ import java.util.regex.Pattern;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.google.protobuf.ByteString;
-
+import io.protostuff.ByteString;
 import unknow.sync.common.FastHash;
 import unknow.sync.common.FileUtils;
 import unknow.sync.common.RollingChecksum;
@@ -215,7 +214,7 @@ public class SyncRead {
 				t.tmp = FileUtils.loadFile(tmp, t.tmpFile, blocSize);
 				if (t.tmp.size > t.remote.getSize())
 					t.tmp = null; // invalid temporary file
-			} catch (IOException e) {
+			} catch (@SuppressWarnings("unused") IOException e) { // ok
 			}
 		}
 
@@ -377,7 +376,7 @@ public class SyncRead {
 					listener.update(byteDone, byteTotal);
 				} else {
 					ByteString bloc = client.getBloc(t.remote.getName(), off);
-					bloc.writeTo(out);
+					ByteString.writeTo(out, bloc);
 					listener.update(byteDone, byteTotal);
 					last += bloc.size();
 				}

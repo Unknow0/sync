@@ -12,8 +12,9 @@ import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.google.protobuf.ByteString;
-
+import io.protostuff.ByteString;
+import io.protostuff.LinkedBuffer;
+import io.protostuff.ProtobufIOUtil;
 import unknow.sync.proto.BlocInfo;
 import unknow.sync.proto.GetBloc;
 import unknow.sync.proto.GetFile;
@@ -43,6 +44,12 @@ public class SyncConnection {
 		out = socket.getOutputStream();
 	}
 
+	private void write(SyncMessage m) throws IOException {
+		LinkedBuffer buffer = LinkedBuffer.allocate();
+		ProtobufIOUtil.writeDelimitedTo(out, m, SyncMessage.getSchema(), buffer);
+		out.flush();
+	}
+
 	/**
 	 * log to the server
 	 * 
@@ -51,14 +58,15 @@ public class SyncConnection {
 	 * @throws IOException
 	 */
 	public ProjectInfo login(String token) throws IOException {
-		SyncMessage.newBuilder().setToken(token).build().writeDelimitedTo(out);
-		out.flush();
+		SyncMessage m = new SyncMessage();
+		m.setToken(token);
+		write(m);
 		log.info("login");
 
-		SyncMessage.Builder b = SyncMessage.newBuilder();
-		if (!b.mergeDelimitedFrom(in) || !b.hasProject())
+		ProtobufIOUtil.mergeDelimitedFrom(in, m, SyncMessage.getSchema());
+		if (m.getProject() == null)
 			throw new IOException("wrong response");
-		return b.getProject();
+		return m.getProject();
 	}
 
 	/**
@@ -69,13 +77,14 @@ public class SyncConnection {
 	 * @throws IOException
 	 */
 	public List<BlocInfo> fileBlocs(String file) throws IOException {
-		SyncMessage.newBuilder().setFile(file).build().writeDelimitedTo(out);
-		out.flush();
+		SyncMessage m = new SyncMessage();
+		m.setInfo(file);
+		write(m);
 
-		SyncMessage.Builder b = SyncMessage.newBuilder();
-		if (!b.mergeDelimitedFrom(in) || !b.hasBloc())
+		ProtobufIOUtil.mergeDelimitedFrom(in, m, SyncMessage.getSchema());
+		if (m.getBlocsList() == null)
 			throw new IOException("wrong response");
-		return b.getBloc().getBlocsList();
+		return m.getBlocsList();
 	}
 
 	/**
@@ -87,13 +96,14 @@ public class SyncConnection {
 	 * @throws IOException
 	 */
 	public ByteString getBloc(String file, int bloc) throws IOException {
-		SyncMessage.newBuilder().setGetbloc(GetBloc.newBuilder().setFile(file).setBloc(bloc)).build().writeDelimitedTo(out);
-		out.flush();
+		SyncMessage m = new SyncMessage();
+		m.setBloc(new GetBloc(file, bloc));
+		write(m);
 
-		SyncMessage.Builder b = SyncMessage.newBuilder();
-		if (!b.mergeDelimitedFrom(in) || !b.hasData())
+		ProtobufIOUtil.mergeDelimitedFrom(in, m, SyncMessage.getSchema());
+		if (m.getData() == null)
 			throw new IOException("wrong response");
-		return b.getData();
+		return m.getData();
 	}
 
 	/**
@@ -105,17 +115,18 @@ public class SyncConnection {
 	 */
 	public void getFile(String file, long offset, OutputStream c) throws IOException {
 		log.info("	getFile({}, {})", file, offset);
-		SyncMessage.newBuilder().setGetfile(GetFile.newBuilder().setFile(file).setOffset(offset)).build().writeDelimitedTo(out);
-		out.flush();
+		SyncMessage m = new SyncMessage();
+		m.setFile(new GetFile(file, offset));
+		write(m);
 
-		SyncMessage.Builder b = SyncMessage.newBuilder();
 		while (true) {
-			if (!b.mergeDelimitedFrom(in) || !b.hasData())
+			ProtobufIOUtil.mergeDelimitedFrom(in, m, SyncMessage.getSchema());
+			if (m.getData() == null)
 				throw new IOException("wrong response");
-			if (b.getData().size() == 0)
+			if (m.getData().size() == 0)
 				return;
-			b.getData().writeTo(c);
-			b.clearData();
+			ByteString.writeTo(c, m.getData());
+			m.setData(null);
 		}
 	}
 
