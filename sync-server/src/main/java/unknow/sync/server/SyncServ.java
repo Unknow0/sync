@@ -40,15 +40,14 @@ public class SyncServ extends NIOServerBuilder {
 	@Override
 	protected void beforeParse() {
 		addr = withOpt("addr").withCli(Option.builder("a").longOpt("addr").argName("port").desc("address to bind to").build()).withValue("54320");
-		path = withOpt("path").withCli(Option.builder("p").longOpt("path").argName("path").desc("folder with data to sync").build());
+		path = withOpt("path").withCli(Option.builder("p").longOpt("path").hasArg().argName("path").desc("folder with data to sync").build()).withValue(".");
 		bs = withOpt("bs").withCli(Option.builder("b").longOpt("bs").argName("size").desc("block size to use").build()).withValue("1024");
-		tokens = withOpt("tokens").withCli(Option.builder().longOpt("tokens").hasArg().desc("read only tokens").build());
+		tokens = withOpt("tokens").withCli(Option.builder().longOpt("tokens").hasArg().desc("read only tokens").build()).withValue("anon");
 	}
 
 	@Override
 	protected void process(NIOServer server, CommandLine cli) throws Exception {
 		Project p = new Project(path.value(cli), parseInt(cli, bs, 0), new HashSet<>(Arrays.asList(tokens.value(cli).split(","))));
-
 		server.bind(parseAddr(cli, addr, ""), () -> new ProtoCo(p));
 	}
 

@@ -13,7 +13,7 @@
 			<plugin>
 				<groupId>io.protostuff</groupId>
 				<artifactId>protostuff-maven-plugin</artifactId>
-				<version>1.8.0</version>
+				<version>${protostuff.version}</version>
 				<executions>
 					<execution>
 						<id>generate-sources</id>
@@ -28,6 +28,8 @@
 									<outputDir>target/generated-sources/proto</outputDir>
 									<output>java_bean</output>
 									<options>
+										<header_source_path>true</header_source_path>
+										<builder_pattern>true</builder_pattern>
 										<separate_schema>true</separate_schema>
 									</options>
 								</protoModule>

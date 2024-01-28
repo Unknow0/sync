@@ -111,5 +111,4 @@ public class Project {
 	public boolean asRight(String token) {
 		return tokens.contains(token);
 	}
-
 }
